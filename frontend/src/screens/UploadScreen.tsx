@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, Dimensions, Alert, TextInput, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Image, Dimensions, Alert, TextInput, TouchableOpacity, ScrollView, Platform, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ListItem } from '../components/ListItem';
 import { Modal } from '../components/Modal';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path } from 'react-native-svg';
 
 interface VideoSelection {
   uri: string;
@@ -72,6 +74,21 @@ const DUMMY_METRICS: AccountMetrics = {
   topPostLikes: 1250,
   postsThisWeek: 5,
 };
+
+const CurvedPath = () => (
+  <Svg
+    width={width * 0.8}
+    height={width * 0.8}
+    style={styles.curvedPath}
+  >
+    <Path
+      d={`M0 ${width * 0.4} Q ${width * 0.4} ${width * 0.3} ${width * 0.8} ${width * 0.4}`}
+      fill="none"
+      stroke="#E5E7EB"
+      strokeWidth="1"
+    />
+  </Svg>
+);
 
 export function UploadScreen() {
   const [selectedVideo, setSelectedVideo] = useState<VideoSelection | null>(null);
@@ -229,18 +246,32 @@ export function UploadScreen() {
       {!selectedVideo ? (
         <View style={styles.uploadContainer}>
           <View style={styles.uploadCircle}>
+            <LinearGradient
+              colors={[
+                '#FFFFFF',
+                '#F8FAFC',
+                '#000000',
+              ]}
+              style={[StyleSheet.absoluteFill, styles.circleGradient]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
             <MaterialCommunityIcons 
               name="video-plus" 
               size={48} 
               color="#2171C1" 
+              style={styles.uploadIcon}
             />
-            <Text style={styles.uploadText}>Select a video to upload</Text>
-            <Button
-              title="Choose from Gallery"
-              leftIcon="image-multiple"
-              onPress={pickVideo}
-              style={styles.button}
-            />
+            <View style={styles.textButtonContainer}>
+              <CurvedPath />
+              <Text style={styles.uploadText}>Select a video to upload</Text>
+              <Button
+                title="Choose from Gallery"
+                leftIcon="image-multiple"
+                onPress={pickVideo}
+                style={styles.button}
+              />
+            </View>
           </View>
         </View>
       ) : (
@@ -410,6 +441,17 @@ export function UploadScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <LinearGradient
+        colors={[
+          'rgba(33, 113, 193, 0.9)',
+          'rgba(33, 113, 193, 0.4)',
+          'rgba(33, 113, 193, 0.3)',
+          'transparent'
+        ]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      />
       <ScrollView style={styles.scrollContent}>
         {step === 'select' ? renderVideoSelection() : renderCaptionDetails()}
       </ScrollView>
@@ -417,7 +459,7 @@ export function UploadScreen() {
   );
 }
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
@@ -442,7 +484,7 @@ const styles = StyleSheet.create({
     width: width * 0.8,
     height: width * 0.8,
     borderRadius: (width * 0.8) / 2,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -453,17 +495,40 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 5,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  circleGradient: {
+    borderRadius: (width * 0.8) / 2,
+  },
+  uploadIcon: {
+    position: 'absolute',
+    top: '25%',
+    transform: [{ translateY: -24 }],
+  },
+  textButtonContainer: {
+    alignItems: 'center',
+    position: 'absolute',
+    width: '100%',
+    top: '50%',
+  },
+  curvedPath: {
+    position: 'absolute',
+    opacity: 0.5,
+    top: 0,
+    left: 0,
   },
   uploadText: {
-    marginTop: 16,
-    marginBottom: 24,
     fontSize: 16,
     color: '#6B7280',
     textAlign: 'center',
+    marginBottom: 16,
+    transform: [{ translateY: -8 }],
   },
   button: {
     minWidth: 200,
     alignSelf: 'center',
+    transform: [{ translateY: -4 }],
   },
   previewContainer: {
     backgroundColor: '#FFFFFF',

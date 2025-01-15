@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import Svg, { Path } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
@@ -77,7 +78,17 @@ export function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {renderWaveBackground()}
+      <LinearGradient
+        colors={[
+          'rgba(33, 113, 193, 0.9)',
+          'rgba(33, 113, 193, 0.4)',
+          'rgba(33, 113, 193, 0.3)',
+          'transparent'
+        ]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      />
       <ScrollView style={styles.scrollContent}>
         {/* Profile Header */}
         <View style={styles.header}>
