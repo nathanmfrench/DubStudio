@@ -1,6 +1,10 @@
 todo:
+keyboard wont go down when you dont want it after going into the keyboard for the captoion
 change components to make it prettier.
 center elements to make prettier.
+
+make upload button actually do stuff, with nice loading animations for when its working in progress.
+
 
 Here are all the components we've created:
 

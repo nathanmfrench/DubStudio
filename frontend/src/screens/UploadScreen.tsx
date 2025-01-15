@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, Image, Dimensions, Alert, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { ListItem } from '../components/ListItem';
 
 interface VideoSelection {
   uri: string;
@@ -12,13 +13,68 @@ interface VideoSelection {
   size: number;
 }
 
+interface CaptionDetails {
+  caption: string;
+  targetLanguages: string[];
+  id: string;
+}
+
+interface ConnectedAccount {
+  platform: 'tiktok' | 'instagram' | 'youtube' | 'facebook';
+  username: string;
+  language?: string;
+  isConnected: boolean;
+}
+
+const AVAILABLE_LANGUAGES = [
+  { code: 'es', name: 'Spanish' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'it', name: 'Italian' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'zh', name: 'Chinese' },
+];
+
 const MAX_DURATION = 90; // 90 seconds max for Instagram Reels
+
+const LANGUAGE_SUFFIXES = {
+  es: 'espanol',
+  fr: 'francais',
+  de: 'deutsch',
+  it: 'italiano',
+  pt: 'portugues',
+  hi: 'hindi',
+  ja: 'nihongo',
+  ko: 'hangugeo',
+  zh: 'zhongwen',
+};
 
 export function UploadScreen() {
   const [selectedVideo, setSelectedVideo] = useState<VideoSelection | null>(null);
+  const [step, setStep] = useState<'select' | 'details'>('select');
+  const [captionDetails, setCaptionDetails] = useState<CaptionDetails>({
+    caption: '',
+    targetLanguages: [],
+    id: `VID_${Date.now()}`
+  });
+  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([
+    { platform: 'tiktok', username: '@username', isConnected: false },
+    { platform: 'instagram', username: '@username', isConnected: false }
+  ]);
 
   const handleBack = () => {
-    setSelectedVideo(null);
+    if (step === 'details') {
+      setStep('select');
+    } else {
+      setSelectedVideo(null);
+    }
+  };
+
+  const handleContinue = () => {
+    setStep('details');
   };
 
   const pickVideo = async () => {
@@ -68,65 +124,202 @@ export function UploadScreen() {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
   };
 
+  const toggleLanguage = (code: string) => {
+    setCaptionDetails(prev => {
+      const languages = prev.targetLanguages.includes(code)
+        ? prev.targetLanguages.filter(lang => lang !== code)
+        : [...prev.targetLanguages, code];
+      return { ...prev, targetLanguages: languages };
+    });
+  };
+
+  const handleConnectAccounts = () => {
+    // Navigate to accounts screen
+  };
+
+  const getRecommendedUsername = (language: string) => {
+    const baseUsername = 'nathanfrench';
+    const suffix = LANGUAGE_SUFFIXES[language as keyof typeof LANGUAGE_SUFFIXES];
+    return `${baseUsername}.${suffix}`;
+  };
+
+  const renderVideoSelection = () => (
+    <View style={styles.content}>
+      {!selectedVideo ? (
+        <View style={styles.uploadContainer}>
+          <View style={styles.uploadCircle}>
+            <MaterialCommunityIcons 
+              name="video-plus" 
+              size={48} 
+              color="#2171C1" 
+            />
+            <Text style={styles.uploadText}>Select a video to upload</Text>
+            <Button
+              title="Choose from Gallery"
+              leftIcon="image-multiple"
+              onPress={pickVideo}
+              style={styles.button}
+            />
+          </View>
+        </View>
+      ) : (
+        <View style={styles.previewContainer}>
+          <Image 
+            source={{ uri: selectedVideo.uri }} 
+            style={styles.thumbnail}
+            resizeMode="cover"
+          />
+          <View style={styles.videoInfo}>
+            <View style={styles.infoItem}>
+              <MaterialCommunityIcons name="clock-outline" size={20} color="#2171C1" />
+              <Text style={styles.infoText}>
+                {formatDuration(selectedVideo.duration)}
+              </Text>
+            </View>
+            <View style={styles.infoItem}>
+              <MaterialCommunityIcons name="file-outline" size={20} color="#2171C1" />
+              <Text style={styles.infoText}>
+                {formatFileSize(selectedVideo.size)}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.actions}>
+            <Button
+              title="Back"
+              variant="secondary"
+              leftIcon="arrow-left"
+              onPress={handleBack}
+              style={styles.actionButton}
+            />
+            <Button
+              title="Continue"
+              leftIcon="arrow-right"
+              onPress={handleContinue}
+              style={styles.actionButton}
+            />
+          </View>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderCaptionDetails = () => (
+    <View style={styles.content}>
+      <View style={styles.detailsContainer}>
+        <View style={styles.videoPreview}>
+          <Image 
+            source={{ uri: selectedVideo?.uri }} 
+            style={styles.smallThumbnail}
+            resizeMode="cover"
+          />
+        </View>
+        
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Caption</Text>
+          <TextInput
+            style={styles.captionInput}
+            multiline
+            placeholder="Enter your video caption..."
+            value={captionDetails.caption}
+            onChangeText={(text) => setCaptionDetails(prev => ({ ...prev, caption: text }))}
+          />
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Select Languages (Video & Caption)</Text>
+          <View style={styles.languageGrid}>
+            {AVAILABLE_LANGUAGES.map(lang => (
+              <TouchableOpacity
+                key={lang.code}
+                style={[
+                  styles.languageButton,
+                  captionDetails.targetLanguages.includes(lang.code) && styles.languageButtonSelected
+                ]}
+                onPress={() => toggleLanguage(lang.code)}
+              >
+                <Text style={[
+                  styles.languageButtonText,
+                  captionDetails.targetLanguages.includes(lang.code) && styles.languageButtonTextSelected
+                ]}>
+                  {lang.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Post to Accounts</Text>
+          <ScrollView 
+            style={styles.accountsScrollView}
+            contentContainerStyle={styles.accountsList}
+            showsVerticalScrollIndicator={false}
+          >
+            {captionDetails.targetLanguages.map((langCode, index) => {
+              const existingAccount = connectedAccounts.find(
+                account => account.isConnected && account.language === langCode
+              );
+
+              if (existingAccount) {
+                return (
+                  <View key={langCode} style={styles.accountItem}>
+                    <ListItem
+                      accountName={existingAccount.username.replace('@', '')}
+                      status="connected"
+                      language={AVAILABLE_LANGUAGES.find(lang => lang.code === langCode)?.name}
+                    />
+                  </View>
+                );
+              }
+
+              return (
+                <View key={langCode} style={styles.accountItem}>
+                  <ListItem
+                    accountName={getRecommendedUsername(langCode)}
+                    subtitle="Recommended account name"
+                    status="disconnected"
+                    language={AVAILABLE_LANGUAGES.find(lang => lang.code === langCode)?.name}
+                  />
+                </View>
+              );
+            })}
+          </ScrollView>
+          {captionDetails.targetLanguages.length === 0 && (
+            <View style={styles.noAccountsContainer}>
+              <Text style={styles.noAccountsText}>Select languages to see recommended accounts</Text>
+            </View>
+          )}
+          <Button
+            title="Manage Accounts"
+            leftIcon="account-cog"
+            variant="secondary"
+            onPress={handleConnectAccounts}
+            style={styles.connectButton}
+          />
+        </View>
+
+        <View style={styles.actions}>
+          <Button
+            title="Back"
+            variant="secondary"
+            leftIcon="arrow-left"
+            onPress={handleBack}
+            style={styles.actionButton}
+          />
+          <Button
+            title="Upload"
+            leftIcon="cloud-upload"
+            onPress={() => {}}
+            style={styles.actionButton}
+          />
+        </View>
+      </View>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        {!selectedVideo ? (
-          <View style={styles.uploadContainer}>
-            <View style={styles.uploadCircle}>
-              <MaterialCommunityIcons 
-                name="video-plus" 
-                size={48} 
-                color="#2171C1" 
-              />
-              <Text style={styles.uploadText}>Select a video to upload</Text>
-              <Button
-                title="Choose from Gallery"
-                leftIcon="image-multiple"
-                onPress={pickVideo}
-                style={styles.button}
-              />
-            </View>
-          </View>
-        ) : (
-          <View style={styles.previewContainer}>
-            <Image 
-              source={{ uri: selectedVideo.uri }} 
-              style={styles.thumbnail}
-              resizeMode="cover"
-            />
-            <View style={styles.videoInfo}>
-              <View style={styles.infoItem}>
-                <MaterialCommunityIcons name="clock-outline" size={20} color="#2171C1" />
-                <Text style={styles.infoText}>
-                  {formatDuration(selectedVideo.duration)}
-                </Text>
-              </View>
-              <View style={styles.infoItem}>
-                <MaterialCommunityIcons name="file-outline" size={20} color="#2171C1" />
-                <Text style={styles.infoText}>
-                  {formatFileSize(selectedVideo.size)}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.actions}>
-              <Button
-                title="Back"
-                variant="secondary"
-                leftIcon="arrow-left"
-                onPress={handleBack}
-                style={styles.actionButton}
-              />
-              <Button
-                title="Continue"
-                leftIcon="arrow-right"
-                onPress={() => {}}
-                style={styles.actionButton}
-              />
-            </View>
-          </View>
-        )}
-      </View>
+      {step === 'select' ? renderVideoSelection() : renderCaptionDetails()}
     </SafeAreaView>
   );
 }
@@ -214,5 +407,111 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  detailsContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  videoPreview: {
+    flexDirection: 'row',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  smallThumbnail: {
+    width: 80,
+    height: 45,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+  },
+  idContainer: {
+    marginLeft: 16,
+    flex: 1,
+  },
+  idLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  idText: {
+    fontSize: 14,
+    color: '#1F2937',
+    fontWeight: '500',
+  },
+  inputContainer: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  inputLabel: {
+    fontSize: 14,
+    color: '#374151',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  captionInput: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 12,
+    height: 100,
+    textAlignVertical: 'top',
+    fontSize: 14,
+    color: '#1F2937',
+  },
+  languageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  languageButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+  },
+  languageButtonSelected: {
+    backgroundColor: '#2171C1',
+    borderColor: '#2171C1',
+  },
+  languageButtonText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  languageButtonTextSelected: {
+    color: '#FFFFFF',
+  },
+  accountsScrollView: {
+    maxHeight: 240, // Shows about 3 accounts at a time
+  },
+  accountsList: {
+    paddingTop: 8,
+  },
+  accountItem: {
+    marginBottom: 8,
+  },
+  noAccountsContainer: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  noAccountsText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 12,
+  },
+  connectButton: {
+    minWidth: 200,
   },
 }); 
