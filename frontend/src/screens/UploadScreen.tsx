@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, Dimensions, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,6 +11,8 @@ interface VideoSelection {
   type: string;
   size: number;
 }
+
+const MAX_DURATION = 90; // 90 seconds max for Instagram Reels
 
 export function UploadScreen() {
   const [selectedVideo, setSelectedVideo] = useState<VideoSelection | null>(null);
@@ -27,14 +29,24 @@ export function UploadScreen() {
         mediaTypes: 'videos',
         allowsEditing: true,
         quality: 1,
-        videoMaxDuration: 300, // 5 minutes max
       });
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
+        const durationInSeconds = (asset.duration || 0) / 1000;
+
+        if (durationInSeconds > MAX_DURATION) {
+          Alert.alert(
+            "Video Too Long",
+            `Videos must be ${MAX_DURATION} seconds or less for Instagram Reels. This video is ${Math.round(durationInSeconds)} seconds.`,
+            [{ text: "OK" }]
+          );
+          return;
+        }
+
         setSelectedVideo({
           uri: asset.uri,
-          duration: (asset.duration || 0) / 1000, // Convert ms to seconds
+          duration: durationInSeconds,
           type: 'video',
           size: asset.fileSize || 0,
         });
