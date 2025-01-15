@@ -425,13 +425,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
   },
   content: {
-    padding: 16,
     flex: 1,
+    padding: 16,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   uploadContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    minHeight: Dimensions.get('window').height - 100,
+    marginTop: -50,
   },
   uploadCircle: {
     width: width * 0.8,
@@ -458,6 +463,7 @@ const styles = StyleSheet.create({
   },
   button: {
     minWidth: 200,
+    alignSelf: 'center',
   },
   previewContainer: {
     backgroundColor: '#FFFFFF',
@@ -517,9 +523,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
     flex: 1, // Take up all available space
-  },
-  scrollContent: {
-    flex: 1,
   },
   videoPreview: {
     flex: 1,

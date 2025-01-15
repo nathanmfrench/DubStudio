@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Platform,
   Image,
+  Dimensions,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -68,6 +70,110 @@ const mockAccounts: Account[] = [
     },
   },
 ];
+
+const GRID_SIZE = 60;
+const SHAPE_SIZE = 20;
+
+function BackgroundPattern() {
+  const translateX = new Animated.Value(0);
+  const translateY = new Animated.Value(0);
+
+  useEffect(() => {
+    const xAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(translateX, {
+          toValue: GRID_SIZE,
+          duration: 20000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateX, {
+          toValue: 0,
+          duration: 20000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    const yAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(translateY, {
+          toValue: GRID_SIZE,
+          duration: 25000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 25000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    xAnimation.start();
+    yAnimation.start();
+    return () => {
+      xAnimation.stop();
+      yAnimation.stop();
+    };
+  }, []);
+
+  const renderShape = (x: number, y: number, index: number) => {
+    const isAlternate = (x + y) % 2 === 0;
+    const opacity = 0.03 + (Math.sin(x + y) * 0.02);
+    
+    return (
+      <View
+        key={`${x}-${y}`}
+        style={[
+          styles.shape,
+          {
+            left: x * GRID_SIZE,
+            top: y * GRID_SIZE,
+            opacity,
+            transform: [
+              { rotate: isAlternate ? '45deg' : '0deg' },
+              { scale: isAlternate ? 0.7 : 1 }
+            ]
+          }
+        ]}
+      />
+    );
+  };
+
+  const renderGrid = () => {
+    const shapes = [];
+    const screenWidth = Dimensions.get('window').width;
+    const screenHeight = Dimensions.get('window').height;
+    const cols = Math.ceil(screenWidth / GRID_SIZE) + 1;
+    const rows = Math.ceil(screenHeight / GRID_SIZE) + 1;
+
+    for (let y = -1; y < rows; y++) {
+      for (let x = -1; x < cols; x++) {
+        shapes.push(renderShape(x, y, y * cols + x));
+      }
+    }
+
+    return shapes;
+  };
+
+  return (
+    <View style={styles.backgroundPattern}>
+      <Animated.View
+        style={[
+          styles.gridContainer,
+          {
+            transform: [
+              { translateX },
+              { translateY }
+            ]
+          }
+        ]}
+      >
+        {renderGrid()}
+      </Animated.View>
+    </View>
+  );
+}
 
 export function AccountsScreen() {
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
@@ -150,6 +256,7 @@ export function AccountsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <BackgroundPattern />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <Text style={styles.title}>Your Accounts</Text>
@@ -194,6 +301,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+  },
+  backgroundPattern: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: 'hidden',
+  },
+  gridContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  shape: {
+    position: 'absolute',
+    width: SHAPE_SIZE,
+    height: SHAPE_SIZE,
+    backgroundColor: '#2171C1',
+    borderRadius: 4,
   },
   scrollContent: {
     padding: 16,
