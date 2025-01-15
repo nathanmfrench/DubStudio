@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, Dimensions, Alert, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Image, Dimensions, Alert, TextInput, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import * as ImagePicker from 'expo-image-picker';
@@ -410,7 +410,9 @@ export function UploadScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {step === 'select' ? renderVideoSelection() : renderCaptionDetails()}
+      <ScrollView style={styles.scrollContent}>
+        {step === 'select' ? renderVideoSelection() : renderCaptionDetails()}
+      </ScrollView>
     </SafeAreaView>
   );
 }

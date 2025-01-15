@@ -179,7 +179,6 @@ export function AccountsScreen() {
       <Modal
         visible={showDashboard}
         onClose={() => {
-          console.warn('Modal closing');
           setShowDashboard(false);
           setSelectedAccount(null);
         }}
@@ -229,39 +228,6 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  accountHeader: {
-    borderBottomWidth: 0,
-  },
-  accountDetails: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  analyticsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  analyticsItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  analyticsValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginTop: 4,
-  },
-  analyticsLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
   dashboardContent: {
     padding: 20,
   },
@@ -296,17 +262,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
   },
   overviewMetric: {
     flex: 1,
@@ -382,14 +337,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     marginTop: 2,
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 16,
   },
 }); 

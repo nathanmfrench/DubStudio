@@ -1,8 +1,8 @@
 todo:
-keyboard wont go down when you dont want it after going into the keyboard for the captoion
+fix dashboards to look better
 change components to make it prettier.
 center elements to make prettier.
-
+make sure accounts persist and are seen by all of the places they need to be seen (post to accounts list, etc)
 make upload button actually do stuff, with nice loading animations for when its working in progress.
 
 make wavy design in the background of all the screens maybe
