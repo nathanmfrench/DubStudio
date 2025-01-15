@@ -13,7 +13,7 @@ export function ComponentsPreview() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [search, setSearch] = useState('');
-  const [username, setUsername] = useState('dubstudio');
+  const [accountName, setAccountName] = useState('nathan.french');
   const [centerModalVisible, setCenterModalVisible] = useState(false);
   const [bottomModalVisible, setBottomModalVisible] = useState(false);
   const [fullModalVisible, setFullModalVisible] = useState(false);
@@ -173,10 +173,10 @@ export function ComponentsPreview() {
           </View>
           <View style={styles.inputContainer}>
             <TextInput
-              label="TikTok Username"
-              value={username}
-              onChangeText={setUsername}
-              placeholder="Enter your TikTok username"
+              label="Instagram Account Name"
+              value={accountName}
+              onChangeText={setAccountName}
+              placeholder="Enter your Instagram account name"
               leftIcon="at"
               error="This field is required"
             />
@@ -187,7 +187,7 @@ export function ComponentsPreview() {
         <View style={styles.section}>
           <View style={styles.videoContainer}>
             <VideoThumbnail
-              title="Original Video - How to make authentic Italian pasta"
+              title="How to make authentic Italian pasta"
               thumbnailUrl="https://picsum.photos/800/450"
               duration="3:45"
               status="original"
@@ -196,7 +196,7 @@ export function ComponentsPreview() {
           </View>
           <View style={styles.videoContainer}>
             <VideoThumbnail
-              title="Processing - Dubbing to Japanese"
+              title="Dubbing to Japanese"
               thumbnailUrl="https://picsum.photos/800/450?random=1"
               duration="2:30"
               status="processing"
@@ -205,7 +205,7 @@ export function ComponentsPreview() {
           </View>
           <View style={styles.videoContainer}>
             <VideoThumbnail
-              title="Completed - Italian Recipe (Hindi Version)"
+              title="Italian Recipe (Hindi Version)"
               thumbnailUrl="https://picsum.photos/800/450?random=2"
               duration="3:45"
               status="dubbed"
@@ -214,7 +214,7 @@ export function ComponentsPreview() {
           </View>
           <View style={styles.videoContainer}>
             <VideoThumbnail
-              title="Failed - Audio quality too low"
+              title="Audio quality too low"
               thumbnailUrl="https://picsum.photos/800/450?random=3"
               duration="1:15"
               status="error"
@@ -259,8 +259,8 @@ export function ComponentsPreview() {
         <View style={styles.section}>
           <View style={styles.listContainer}>
             <ListItem
-              platform="tiktok"
-              accountName="@cookingmaster"
+              platform="instagram"
+              accountName="cookingmaster"
               subtitle="Primary Account"
               status="connected"
               language="Hindi"
@@ -270,7 +270,7 @@ export function ComponentsPreview() {
           <View style={styles.listContainer}>
             <ListItem
               platform="instagram"
-              accountName="@foodie_recipes"
+              accountName="foodie_recipes"
               subtitle="Connecting..."
               status="pending"
               onPress={() => {}}
@@ -351,15 +351,15 @@ export function ComponentsPreview() {
           >
             <View style={styles.modalContent}>
               <ListItem
-                platform="tiktok"
+                platform="instagram"
                 accountName="Hindi"
                 subtitle="India"
                 status="connected"
                 onPress={() => setBottomModalVisible(false)}
               />
               <View style={styles.modalDivider} />
-              <ListItem
-                platform="tiktok"
+              <ListItem 
+                platform="instagram"
                 accountName="Japanese"
                 subtitle="Japan"
                 status="connected"
@@ -367,7 +367,7 @@ export function ComponentsPreview() {
               />
               <View style={styles.modalDivider} />
               <ListItem
-                platform="tiktok"
+                platform="instagram"
                 accountName="Korean"
                 subtitle="South Korea"
                 status="disconnected"

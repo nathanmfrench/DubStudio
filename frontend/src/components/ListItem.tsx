@@ -1,41 +1,29 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ViewStyle,
-  StyleProp,
-  Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-type PlatformType = 'tiktok' | 'instagram' | 'youtube' | 'facebook';
-type ConnectionStatus = 'connected' | 'disconnected' | 'pending' | 'error';
+type PlatformType = 'instagram' | 'youtube' | 'facebook';
+type Status = 'connected' | 'disconnected' | 'pending' | 'error';
 
 interface ListItemProps {
   platform: PlatformType;
   accountName: string;
   subtitle?: string;
-  status: ConnectionStatus;
+  status?: Status;
   language?: string;
   onPress?: () => void;
-  style?: StyleProp<ViewStyle>;
 }
 
 export function ListItem({
   platform,
   accountName,
   subtitle,
-  status,
+  status = 'disconnected',
   language,
   onPress,
-  style,
 }: ListItemProps) {
   const getPlatformIcon = () => {
     switch (platform) {
-      case 'tiktok':
-        return 'music-circle';
       case 'instagram':
         return 'instagram';
       case 'youtube':
@@ -56,18 +44,18 @@ export function ListItem({
       case 'error':
         return '#EF4444';
       default:
-        return '#9CA3AF';
+        return '#6B7280';
     }
   };
 
   const getStatusIcon = () => {
     switch (status) {
       case 'connected':
-        return 'check-circle';
+        return 'check-circle-outline';
       case 'pending':
         return 'clock-outline';
       case 'error':
-        return 'alert-circle';
+        return 'alert-circle-outline';
       default:
         return 'link-variant-off';
     }
@@ -75,48 +63,47 @@ export function ListItem({
 
   return (
     <TouchableOpacity
-      style={[styles.container, style]}
+      style={styles.container}
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={0.9}
     >
-      <View style={styles.leftIcon}>
-        <MaterialCommunityIcons
-          name={getPlatformIcon()}
-          size={24}
-          color="#2171C1"
-        />
-      </View>
       <View style={styles.content}>
-        <View style={styles.titleRow}>
-          <Text style={styles.accountName}>{accountName}</Text>
-          {language && status === 'connected' && (
-            <View style={styles.languageTag}>
-              <MaterialCommunityIcons
-                name="translate"
-                size={12}
-                color="#2171C1"
-              />
-              <Text style={styles.languageText}>{language}</Text>
-            </View>
-          )}
+        <View style={styles.platformIcon}>
+          <MaterialCommunityIcons
+            name={getPlatformIcon()}
+            size={24}
+            color="#2171C1"
+          />
         </View>
-        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        <View style={styles.info}>
+          <Text style={styles.username}>{accountName}</Text>
+          {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        </View>
+        <View style={[styles.status, { backgroundColor: getStatusColor() }]}>
+          <MaterialCommunityIcons
+            name={getStatusIcon()}
+            size={14}
+            color="#FFFFFF"
+          />
+        </View>
       </View>
-      <View style={[styles.status, { backgroundColor: getStatusColor() }]}>
-        <MaterialCommunityIcons
-          name={getStatusIcon()}
-          size={16}
-          color="#FFFFFF"
-        />
-      </View>
+      {status === 'connected' && language && (
+        <View style={styles.languageContainer}>
+          <MaterialCommunityIcons
+            name="translate"
+            size={14}
+            color="#2171C1"
+            style={styles.languageIcon}
+          />
+          <Text style={styles.languageText}>{language}</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 12,
@@ -124,58 +111,64 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
       },
       android: {
-        elevation: 2,
+        elevation: 4,
       },
     }),
   },
-  leftIcon: {
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  platformIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(33, 113, 193, 0.1)',
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  content: {
+  info: {
     flex: 1,
     marginLeft: 12,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  accountName: {
-    fontSize: 16,
+  username: {
+    fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
   },
+  accountName: {
+    fontSize: 12,
+    color: '#2171C1',
+    marginTop: 2,
+  },
   subtitle: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#6B7280',
     marginTop: 2,
   },
   status: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 12,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
-  languageTag: {
+  languageContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(33, 113, 193, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    gap: 4,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  languageIcon: {
+    marginRight: 4,
   },
   languageText: {
     fontSize: 12,

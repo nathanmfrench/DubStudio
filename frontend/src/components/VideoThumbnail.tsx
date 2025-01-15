@@ -10,6 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface VideoThumbnailProps {
   title: string;
@@ -31,13 +32,13 @@ export function VideoThumbnail({
   const getStatusColor = () => {
     switch (status) {
       case 'processing':
-        return '#FCD34D'; // Yellow
+        return '#FCD34D';
       case 'dubbed':
-        return '#34D399'; // Green
+        return '#34D399';
       case 'error':
-        return '#EF4444'; // Red
+        return '#EF4444';
       default:
-        return '#6B7280'; // Gray
+        return '#6B7280';
     }
   };
 
@@ -58,7 +59,7 @@ export function VideoThumbnail({
     <TouchableOpacity
       style={[styles.container, style]}
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={0.9}
     >
       <View style={styles.thumbnailContainer}>
         <Image
@@ -66,7 +67,18 @@ export function VideoThumbnail({
           style={styles.thumbnail}
           resizeMode="cover"
         />
+        <LinearGradient
+          colors={['rgba(0,0,0,0.7)', 'transparent', 'rgba(0,0,0,0.7)']}
+          locations={[0, 0.5, 1]}
+          style={styles.gradient}
+        />
         <View style={styles.duration}>
+          <MaterialCommunityIcons
+            name="clock-outline"
+            size={12}
+            color="#FFFFFF"
+            style={styles.durationIcon}
+          />
           <Text style={styles.durationText}>{duration}</Text>
         </View>
         <View style={[styles.status, { backgroundColor: getStatusColor() }]}>
@@ -78,9 +90,30 @@ export function VideoThumbnail({
         </View>
       </View>
       <View style={styles.details}>
-        <Text style={styles.title} numberOfLines={2}>
-          {title}
-        </Text>
+        <View style={styles.titleContainer}>
+          <MaterialCommunityIcons
+            name={status === 'dubbed' ? 'translate' : 'video'}
+            size={18}
+            color="#2171C1"
+            style={styles.titleIcon}
+          />
+          <Text style={styles.title} numberOfLines={2}>
+            {title}
+          </Text>
+          <View style={styles.tagContainer}>
+            <View style={[styles.tag, { backgroundColor: getStatusColor() }]}>
+              <MaterialCommunityIcons
+                name={getStatusIcon()}
+                size={12}
+                color="#FFFFFF"
+                style={styles.tagIcon}
+              />
+              <Text style={styles.tagText}>
+                {status.charAt(0).toUpperCase() + status.slice(1)}
+              </Text>
+            </View>
+          </View>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -96,10 +129,10 @@ const styles = StyleSheet.create({
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowRadius: 8,
       },
       android: {
-        elevation: 3,
+        elevation: 4,
       },
     }),
   },
@@ -112,37 +145,81 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  gradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   duration: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
+    bottom: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  durationIcon: {
+    marginRight: 4,
   },
   durationText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   status: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    top: 12,
+    right: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   details: {
     padding: 12,
   },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  titleIcon: {
+    marginRight: 8,
+    marginTop: 2,
+  },
   title: {
+    flex: 1,
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#1F2937',
     lineHeight: 20,
+  },
+  tagContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 8,
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  tagIcon: {
+    marginRight: 4,
+  },
+  tagText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#FFFFFF',
   },
 }); 
