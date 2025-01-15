@@ -9,7 +9,6 @@ import {
   StyleProp,
   Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 
 type ButtonVariant = 'primary' | 'secondary' | 'text';
 type ButtonSize = 'small' | 'medium' | 'large';
@@ -76,73 +75,31 @@ export function Button({
     textStyle,
   ];
 
-  const renderContent = () => (
-    loading ? (
-      <ActivityIndicator
-        color={variant === 'primary' ? '#FFFFFF' : '#2171C1'}
-        size={size === 'small' ? 'small' : 'small'}
-      />
-    ) : (
-      <Text style={textStyles}>{title}</Text>
-    )
-  );
-
-  if (variant === 'primary') {
-    return (
-      <TouchableOpacity
-        onPress={onPress}
-        disabled={disabled || loading}
-        style={[styles.buttonWrapper, fullWidth && styles.fullWidth]}
-        activeOpacity={0.8}
-      >
-        <LinearGradient
-          colors={['#2171C1', '#1BFFFF']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[buttonStyles, styles.gradient]}
-        >
-          {renderContent()}
-        </LinearGradient>
-      </TouchableOpacity>
-    );
-  }
-
   return (
     <TouchableOpacity
       onPress={onPress}
       disabled={disabled || loading}
-      style={[buttonStyles, variant === 'secondary' && styles.secondary]}
+      style={[buttonStyles, variant === 'primary' && styles.primary, variant === 'secondary' && styles.secondary]}
       activeOpacity={0.8}
     >
-      {renderContent()}
+      {loading ? (
+        <ActivityIndicator
+          color={variant === 'primary' ? '#FFFFFF' : '#2171C1'}
+          size={size === 'small' ? 'small' : 'small'}
+        />
+      ) : (
+        <Text style={textStyles}>{title}</Text>
+      )}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  buttonWrapper: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#2171C1',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
-  },
   button: {
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
-  },
-  gradient: {
-    borderRadius: 12,
   },
   fullWidth: {
     width: '100%',

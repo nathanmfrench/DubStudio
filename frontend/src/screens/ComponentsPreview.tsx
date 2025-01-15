@@ -6,6 +6,7 @@ import { TextInput } from '../components/TextInput';
 import { VideoThumbnail } from '../components/VideoThumbnail';
 import { ListItem } from '../components/ListItem';
 import { Feedback } from '../components/Feedback';
+import { Modal } from '../components/Modal';
 
 export function ComponentsPreview() {
   const [loading, setLoading] = useState(false);
@@ -13,6 +14,9 @@ export function ComponentsPreview() {
   const [password, setPassword] = useState('');
   const [search, setSearch] = useState('');
   const [username, setUsername] = useState('dubstudio');
+  const [centerModalVisible, setCenterModalVisible] = useState(false);
+  const [bottomModalVisible, setBottomModalVisible] = useState(false);
+  const [fullModalVisible, setFullModalVisible] = useState(false);
 
   const handlePress = () => {
     setLoading(true);
@@ -294,7 +298,106 @@ export function ComponentsPreview() {
 
         <SectionTitle title="Modals" />
         <View style={styles.section}>
-          {/* Modal components will go here */}
+          <View style={styles.buttonContainer}>
+            <Button
+              title="Open Center Modal"
+              onPress={() => setCenterModalVisible(true)}
+            />
+          </View>
+          <View style={styles.buttonContainer}>
+            <Button
+              title="Open Bottom Sheet"
+              onPress={() => setBottomModalVisible(true)}
+            />
+          </View>
+          <View style={styles.buttonContainer}>
+            <Button
+              title="Open Full Modal"
+              onPress={() => setFullModalVisible(true)}
+            />
+          </View>
+
+          <Modal
+            visible={centerModalVisible}
+            onClose={() => setCenterModalVisible(false)}
+            title="Confirmation"
+            size="small"
+          >
+            <View style={styles.modalContent}>
+              <Text style={styles.modalText}>
+                Are you sure you want to delete this video?
+              </Text>
+              <View style={styles.modalButtons}>
+                <Button
+                  title="Delete"
+                  onPress={() => setCenterModalVisible(false)}
+                />
+                <View style={{ width: 12 }} />
+                <Button
+                  title="Cancel"
+                  variant="secondary"
+                  onPress={() => setCenterModalVisible(false)}
+                />
+              </View>
+            </View>
+          </Modal>
+
+          <Modal
+            visible={bottomModalVisible}
+            onClose={() => setBottomModalVisible(false)}
+            title="Select Language"
+            position="bottom"
+            size="full"
+          >
+            <View style={styles.modalContent}>
+              <ListItem
+                platform="tiktok"
+                accountName="Hindi"
+                subtitle="India"
+                status="connected"
+                onPress={() => setBottomModalVisible(false)}
+              />
+              <View style={styles.modalDivider} />
+              <ListItem
+                platform="tiktok"
+                accountName="Japanese"
+                subtitle="Japan"
+                status="connected"
+                onPress={() => setBottomModalVisible(false)}
+              />
+              <View style={styles.modalDivider} />
+              <ListItem
+                platform="tiktok"
+                accountName="Korean"
+                subtitle="South Korea"
+                status="disconnected"
+                onPress={() => setBottomModalVisible(false)}
+              />
+            </View>
+          </Modal>
+
+          <Modal
+            visible={fullModalVisible}
+            onClose={() => setFullModalVisible(false)}
+            title="Video Preview"
+            size="large"
+          >
+            <View style={styles.modalContent}>
+              <VideoThumbnail
+                title="Original Video - How to make authentic Italian pasta"
+                thumbnailUrl="https://picsum.photos/800/450"
+                duration="3:45"
+                status="original"
+                onPress={() => {}}
+              />
+              <View style={styles.modalDivider} />
+              <Feedback
+                type="info"
+                message="Processing video"
+                description="This might take a few minutes"
+              />
+            </View>
+          </Modal>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -354,5 +457,23 @@ const styles = StyleSheet.create({
   },
   feedbackContainer: {
     marginBottom: 12,
+  },
+  modalContent: {
+    minWidth: '100%',
+  },
+  modalText: {
+    fontSize: 16,
+    color: '#1F2937',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 12,
   },
 }); 

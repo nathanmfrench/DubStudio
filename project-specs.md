@@ -1,7 +1,46 @@
 todo:
-fix components page to make new large primary buitton, medium primary, small primary, secondary buttons, 
-and fix disabled state.
-maybe add more types (tags) to the accounts or something. Here's all of the components:
+change components to make it prettier.
+
+
+Here are all the components we've created:
+
+### Core Components
+1. **Button**
+   - Variants: Primary (blue), Secondary (outlined), Text
+   - Sizes: Small, Medium, Large
+   - States: Normal, Loading, Disabled
+   - Props: `title`, `variant`, `size`, `disabled`, `loading`, `fullWidth`
+
+2. **TextInput**
+   - Features: Label, Error state, Helper text
+   - Icons: Left icon, Right icon (with optional press)
+   - Special types: Password (with toggle), Email, Search
+   - Props: `label`, `value`, `error`, `leftIcon`, `rightIcon`, `secureTextEntry`
+
+3. **VideoThumbnail**
+   - Features: 16:9 aspect ratio, Duration badge
+   - Status indicators: Original, Processing, Dubbed, Error
+   - Props: `title`, `thumbnailUrl`, `duration`, `status`
+
+4. **ListItem**
+   - Platform icons: TikTok, Instagram, YouTube, Facebook
+   - Status indicators: Connected, Disconnected, Pending, Error
+   - Language tag for connected accounts
+   - Props: `platform`, `accountName`, `subtitle`, `status`, `language`
+
+5. **Feedback**
+   - Types: Success, Error, Info, Loading
+   - Features: Icon, Message, Optional description
+   - Props: `type`, `message`, `description`
+
+6. **Modal**
+   - Positions: Center, Bottom sheet
+   - Sizes: Small, Medium, Large, Full
+   - Features: Title, Close button, Safe area handling
+   - Props: `visible`, `onClose`, `title`, `position`, `size`
+
+
+maybe modify types (tags) to the accounts or something. Here's all of the components:
 
 1. **Initial Setup**
    - Set up a new React Native project with TypeScript
