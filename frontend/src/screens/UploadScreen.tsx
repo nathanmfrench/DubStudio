@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ListItem } from '../components/ListItem';
+import { Modal } from '../components/Modal';
 
 interface VideoSelection {
   uri: string;
@@ -24,6 +25,16 @@ interface ConnectedAccount {
   username: string;
   language?: string;
   isConnected: boolean;
+}
+
+interface AccountMetrics {
+  followers: number;
+  followersGrowth: number;
+  engagement: number;
+  impressions: number;
+  reachRate: number;
+  topPostLikes: number;
+  postsThisWeek: number;
 }
 
 const AVAILABLE_LANGUAGES = [
@@ -52,6 +63,16 @@ const LANGUAGE_SUFFIXES = {
   zh: 'zhongwen',
 };
 
+const DUMMY_METRICS: AccountMetrics = {
+  followers: 15420,
+  followersGrowth: 324,
+  engagement: 4.8,
+  impressions: 45200,
+  reachRate: 28.5,
+  topPostLikes: 1250,
+  postsThisWeek: 5,
+};
+
 export function UploadScreen() {
   const [selectedVideo, setSelectedVideo] = useState<VideoSelection | null>(null);
   const [step, setStep] = useState<'select' | 'details'>('select');
@@ -64,6 +85,7 @@ export function UploadScreen() {
     { platform: 'tiktok', username: '@username', isConnected: false },
     { platform: 'instagram', username: '@username', isConnected: false }
   ]);
+  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
 
   const handleBack = () => {
     if (step === 'details') {
@@ -143,6 +165,65 @@ export function UploadScreen() {
     return `${baseUsername}.${suffix}`;
   };
 
+  const handleAccountPress = (accountName: string) => {
+    setSelectedAccount(accountName);
+  };
+
+  const renderMetricItem = (label: string, value: string | number, icon: keyof typeof MaterialCommunityIcons.glyphMap) => (
+    <View style={styles.metricItem}>
+      <MaterialCommunityIcons name={icon} size={24} color="#2171C1" style={styles.metricIcon} />
+      <View>
+        <Text style={styles.metricValue}>{value}</Text>
+        <Text style={styles.metricLabel}>{label}</Text>
+      </View>
+    </View>
+  );
+
+  const renderDashboard = () => (
+    <ScrollView style={styles.dashboardContent}>
+      <View style={styles.metricsHeader}>
+        <MaterialCommunityIcons name="instagram" size={32} color="#2171C1" />
+        <Text style={styles.accountTitle}>@{selectedAccount}</Text>
+      </View>
+
+      <View style={styles.metricsOverview}>
+        {renderMetricItem('Followers', DUMMY_METRICS.followers.toLocaleString(), 'account-group')}
+        <View style={styles.metricDivider} />
+        {renderMetricItem('Growth', `+${DUMMY_METRICS.followersGrowth}`, 'trending-up')}
+        <View style={styles.metricDivider} />
+        {renderMetricItem('Engagement', `${DUMMY_METRICS.engagement}%`, 'heart-outline')}
+      </View>
+
+      <View style={styles.metricSection}>
+        <Text style={styles.sectionTitle}>Performance Metrics</Text>
+        <View style={styles.metricsGrid}>
+          {renderMetricItem('Impressions', DUMMY_METRICS.impressions.toLocaleString(), 'eye-outline')}
+          {renderMetricItem('Reach Rate', `${DUMMY_METRICS.reachRate}%`, 'chart-line')}
+          {renderMetricItem('Top Post Likes', DUMMY_METRICS.topPostLikes.toLocaleString(), 'thumb-up-outline')}
+          {renderMetricItem('Posts This Week', DUMMY_METRICS.postsThisWeek, 'image-multiple')}
+        </View>
+      </View>
+
+      <View style={styles.metricSection}>
+        <Text style={styles.sectionTitle}>Recent Posts</Text>
+        <View style={styles.recentPosts}>
+          {[1, 2, 3].map((i) => (
+            <View key={i} style={styles.postPreview}>
+              <Image
+                source={{ uri: `https://picsum.photos/200/200?random=${i}` }}
+                style={styles.postImage}
+              />
+              <View style={styles.postStats}>
+                <MaterialCommunityIcons name="heart" size={12} color="#EF4444" />
+                <Text style={styles.postStatsText}>{Math.floor(Math.random() * 1000)}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+    </ScrollView>
+  );
+
   const renderVideoSelection = () => (
     <View style={styles.content}>
       {!selectedVideo ? (
@@ -206,97 +287,98 @@ export function UploadScreen() {
   const renderCaptionDetails = () => (
     <View style={styles.content}>
       <View style={styles.detailsContainer}>
-        <View style={styles.videoPreview}>
-          <Image 
-            source={{ uri: selectedVideo?.uri }} 
-            style={styles.smallThumbnail}
-            resizeMode="cover"
-          />
-        </View>
-        
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Caption</Text>
-          <TextInput
-            style={styles.captionInput}
-            multiline
-            placeholder="Enter your video caption..."
-            value={captionDetails.caption}
-            onChangeText={(text) => setCaptionDetails(prev => ({ ...prev, caption: text }))}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Select Languages (Video & Caption)</Text>
-          <View style={styles.languageGrid}>
-            {AVAILABLE_LANGUAGES.map(lang => (
-              <TouchableOpacity
-                key={lang.code}
-                style={[
-                  styles.languageButton,
-                  captionDetails.targetLanguages.includes(lang.code) && styles.languageButtonSelected
-                ]}
-                onPress={() => toggleLanguage(lang.code)}
-              >
-                <Text style={[
-                  styles.languageButtonText,
-                  captionDetails.targetLanguages.includes(lang.code) && styles.languageButtonTextSelected
-                ]}>
-                  {lang.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        <ScrollView style={styles.scrollContent}>
+          <View style={styles.videoPreview}>
+            <Image 
+              source={{ uri: selectedVideo?.uri }} 
+              style={styles.smallThumbnail}
+              resizeMode="cover"
+            />
           </View>
-        </View>
+          
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Caption</Text>
+            <TextInput
+              style={styles.captionInput}
+              multiline
+              placeholder="Enter your video caption..."
+              value={captionDetails.caption}
+              onChangeText={(text) => setCaptionDetails(prev => ({ ...prev, caption: text }))}
+            />
+          </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Post to Accounts</Text>
-          <ScrollView 
-            style={styles.accountsScrollView}
-            contentContainerStyle={styles.accountsList}
-            showsVerticalScrollIndicator={false}
-          >
-            {captionDetails.targetLanguages.map((langCode, index) => {
-              const existingAccount = connectedAccounts.find(
-                account => account.isConnected && account.language === langCode
-              );
+          <View style={styles.inputContainer}>
+            <Text style={styles.languagesLabel}>Select Languages (Video & Caption)</Text>
+            <View style={styles.languageGrid}>
+              {AVAILABLE_LANGUAGES.map(lang => (
+                <TouchableOpacity
+                  key={lang.code}
+                  style={[
+                    styles.languageButton,
+                    captionDetails.targetLanguages.includes(lang.code) && styles.languageButtonSelected
+                  ]}
+                  onPress={() => toggleLanguage(lang.code)}
+                >
+                  <Text style={[
+                    styles.languageButtonText,
+                    captionDetails.targetLanguages.includes(lang.code) && styles.languageButtonTextSelected
+                  ]}>
+                    {lang.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
 
-              if (existingAccount) {
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Post to Accounts</Text>
+            <View style={styles.accountsList}>
+              {captionDetails.targetLanguages.map((langCode, index) => {
+                const existingAccount = connectedAccounts.find(
+                  account => account.isConnected && account.language === langCode
+                );
+
+                if (existingAccount) {
+                  return (
+                    <View key={langCode} style={styles.accountItem}>
+                      <ListItem
+                        accountName={existingAccount.username.replace('@', '')}
+                        status="connected"
+                        language={AVAILABLE_LANGUAGES.find(lang => lang.code === langCode)?.name}
+                        onPress={() => handleAccountPress(existingAccount.username.replace('@', ''))}
+                      />
+                    </View>
+                  );
+                }
+
                 return (
                   <View key={langCode} style={styles.accountItem}>
                     <ListItem
-                      accountName={existingAccount.username.replace('@', '')}
-                      status="connected"
+                      accountName={getRecommendedUsername(langCode)}
+                      subtitle="Recommended account name"
+                      status="disconnected"
                       language={AVAILABLE_LANGUAGES.find(lang => lang.code === langCode)?.name}
                     />
                   </View>
                 );
-              }
-
-              return (
-                <View key={langCode} style={styles.accountItem}>
-                  <ListItem
-                    accountName={getRecommendedUsername(langCode)}
-                    subtitle="Recommended account name"
-                    status="disconnected"
-                    language={AVAILABLE_LANGUAGES.find(lang => lang.code === langCode)?.name}
-                  />
-                </View>
-              );
-            })}
-          </ScrollView>
-          {captionDetails.targetLanguages.length === 0 && (
-            <View style={styles.noAccountsContainer}>
-              <Text style={styles.noAccountsText}>Select languages to see recommended accounts</Text>
+              })}
             </View>
-          )}
-          <Button
-            title="Manage Accounts"
-            leftIcon="account-cog"
-            variant="secondary"
-            onPress={handleConnectAccounts}
-            style={styles.connectButton}
-          />
-        </View>
+            {captionDetails.targetLanguages.length === 0 && (
+              <View style={styles.noAccountsContainer}>
+                <Text style={styles.noAccountsText}>Select languages to see recommended accounts</Text>
+              </View>
+            )}
+            {captionDetails.targetLanguages.length > 0 && (
+              <Button
+                title="Create Recommended Accounts"
+                leftIcon="account-plus"
+                variant="secondary"
+                onPress={handleConnectAccounts}
+                style={styles.connectButton}
+              />
+            )}
+          </View>
+        </ScrollView>
 
         <View style={styles.actions}>
           <Button
@@ -314,6 +396,15 @@ export function UploadScreen() {
           />
         </View>
       </View>
+
+      <Modal
+        visible={!!selectedAccount}
+        onClose={() => setSelectedAccount(null)}
+        title="Account Dashboard"
+        size="large"
+      >
+        {renderDashboard()}
+      </Modal>
     </View>
   );
 
@@ -404,6 +495,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 16,
     gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
   },
   actionButton: {
     flex: 1,
@@ -420,12 +514,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+    flex: 1, // Take up all available space
+  },
+  scrollContent: {
+    flex: 1,
   },
   videoPreview: {
-    flexDirection: 'row',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   smallThumbnail: {
@@ -433,20 +529,7 @@ const styles = StyleSheet.create({
     height: 45,
     borderRadius: 8,
     backgroundColor: '#F3F4F6',
-  },
-  idContainer: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  idLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  idText: {
-    fontSize: 14,
-    color: '#1F2937',
-    fontWeight: '500',
+    marginHorizontal: 12,
   },
   inputContainer: {
     padding: 16,
@@ -458,6 +541,7 @@ const styles = StyleSheet.create({
     color: '#374151',
     marginBottom: 8,
     fontWeight: '500',
+    textAlign: 'left',
   },
   captionInput: {
     backgroundColor: '#F9FAFB',
@@ -467,12 +551,14 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     fontSize: 14,
     color: '#1F2937',
+    textAlign: 'left',
   },
   languageGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
     marginTop: 8,
+    justifyContent: 'center',
   },
   languageButton: {
     paddingHorizontal: 16,
@@ -493,11 +579,9 @@ const styles = StyleSheet.create({
   languageButtonTextSelected: {
     color: '#FFFFFF',
   },
-  accountsScrollView: {
-    maxHeight: 240, // Shows about 3 accounts at a time
-  },
   accountsList: {
     paddingTop: 8,
+    alignItems: 'stretch',
   },
   accountItem: {
     marginBottom: 8,
@@ -513,5 +597,106 @@ const styles = StyleSheet.create({
   },
   connectButton: {
     minWidth: 200,
+    alignSelf: 'center',
+    marginTop: 16,
+  },
+  languagesLabel: {
+    fontSize: 14,
+    color: '#374151',
+    marginBottom: 8,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  dashboardContent: {
+    padding: 16,
+  },
+  metricsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    gap: 12,
+  },
+  accountTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  metricsOverview: {
+    flexDirection: 'row',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+  },
+  metricItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  metricIcon: {
+    backgroundColor: '#EFF6FF',
+    padding: 8,
+    borderRadius: 8,
+  },
+  metricValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  metricLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  metricDivider: {
+    width: 1,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 16,
+  },
+  metricSection: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  recentPosts: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  postPreview: {
+    flex: 1,
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+  },
+  postImage: {
+    width: '100%',
+    height: '100%',
+  },
+  postStats: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  postStatsText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '500',
   },
 }); 

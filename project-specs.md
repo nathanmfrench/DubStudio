@@ -5,6 +5,7 @@ center elements to make prettier.
 
 make upload button actually do stuff, with nice loading animations for when its working in progress.
 
+make wavy design in the background of all the screens maybe
 
 Here are all the components we've created:
 
