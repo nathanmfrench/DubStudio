@@ -259,7 +259,6 @@ export function ComponentsPreview() {
         <View style={styles.section}>
           <View style={styles.listContainer}>
             <ListItem
-              platform="instagram"
               accountName="cookingmaster"
               subtitle="Primary Account"
               status="connected"
@@ -269,7 +268,6 @@ export function ComponentsPreview() {
           </View>
           <View style={styles.listContainer}>
             <ListItem
-              platform="instagram"
               accountName="foodie_recipes"
               subtitle="Connecting..."
               status="pending"
@@ -278,7 +276,6 @@ export function ComponentsPreview() {
           </View>
           <View style={styles.listContainer}>
             <ListItem
-              platform="youtube"
               accountName="Cooking Channel"
               status="connected"
               language="Japanese"
@@ -287,7 +284,6 @@ export function ComponentsPreview() {
           </View>
           <View style={styles.listContainer}>
             <ListItem
-              platform="facebook"
               accountName="Recipe Page"
               subtitle="Authentication failed"
               status="error"
@@ -351,15 +347,13 @@ export function ComponentsPreview() {
           >
             <View style={styles.modalContent}>
               <ListItem
-                platform="instagram"
-                accountName="Hindi"
+                accountName="nathanfrench.india"
                 subtitle="India"
                 status="connected"
                 onPress={() => setBottomModalVisible(false)}
               />
               <View style={styles.modalDivider} />
               <ListItem 
-                platform="instagram"
                 accountName="Japanese"
                 subtitle="Japan"
                 status="connected"
@@ -367,7 +361,6 @@ export function ComponentsPreview() {
               />
               <View style={styles.modalDivider} />
               <ListItem
-                platform="instagram"
                 accountName="Korean"
                 subtitle="South Korea"
                 status="disconnected"

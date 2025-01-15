@@ -1,94 +1,125 @@
 import React from 'react';
-import {
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  ViewStyle,
-  TextStyle,
-  StyleProp,
-  Platform,
-} from 'react-native';
-
-type ButtonVariant = 'primary' | 'secondary' | 'text';
-type ButtonSize = 'small' | 'medium' | 'large';
+import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import type { MaterialCommunityIcons as IconType } from '@expo/vector-icons';
 
 interface ButtonProps {
-  onPress: () => void;
   title: string;
-  variant?: ButtonVariant;
-  size?: ButtonSize;
+  onPress: () => void;
+  variant?: 'primary' | 'secondary' | 'text';
+  size?: 'small' | 'medium' | 'large';
   disabled?: boolean;
   loading?: boolean;
-  style?: StyleProp<ViewStyle>;
-  textStyle?: StyleProp<TextStyle>;
   fullWidth?: boolean;
+  leftIcon?: keyof typeof IconType.glyphMap;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function Button({
-  onPress,
   title,
+  onPress,
   variant = 'primary',
   size = 'medium',
   disabled = false,
   loading = false,
-  style,
-  textStyle,
   fullWidth = false,
+  leftIcon,
+  style,
 }: ButtonProps) {
-  const getButtonHeight = (size: ButtonSize) => {
-    switch (size) {
-      case 'small':
-        return 36;
-      case 'large':
-        return 56;
+  const getBackgroundColor = () => {
+    if (disabled) return '#E5E7EB';
+    switch (variant) {
+      case 'secondary':
+        return 'transparent';
+      case 'text':
+        return 'transparent';
       default:
-        return 48;
+        return '#2171C1';
     }
   };
 
-  const getFontSize = (size: ButtonSize) => {
+  const getBorderColor = () => {
+    if (disabled) return '#E5E7EB';
+    switch (variant) {
+      case 'secondary':
+        return '#2171C1';
+      default:
+        return 'transparent';
+    }
+  };
+
+  const getTextColor = () => {
+    if (disabled) return '#9CA3AF';
+    switch (variant) {
+      case 'primary':
+        return '#FFFFFF';
+      default:
+        return '#2171C1';
+    }
+  };
+
+  const getPadding = () => {
+    switch (size) {
+      case 'small':
+        return { paddingVertical: 6, paddingHorizontal: 12 };
+      case 'large':
+        return { paddingVertical: 12, paddingHorizontal: 24 };
+      default:
+        return { paddingVertical: 8, paddingHorizontal: 16 };
+    }
+  };
+
+  const getFontSize = () => {
     switch (size) {
       case 'small':
         return 14;
       case 'large':
-        return 18;
-      default:
         return 16;
+      default:
+        return 14;
     }
   };
 
-  const buttonStyles = [
-    styles.button,
-    { height: getButtonHeight(size) },
-    variant === 'text' && styles.textButton,
-    fullWidth && styles.fullWidth,
-    disabled && styles.disabled,
-    style,
-  ];
-
-  const textStyles = [
-    styles.text,
-    { fontSize: getFontSize(size) },
-    styles[`${variant}Text`],
-    disabled && styles.disabledText,
-    textStyle,
-  ];
-
   return (
     <TouchableOpacity
+      style={[
+        styles.button,
+        {
+          backgroundColor: getBackgroundColor(),
+          borderColor: getBorderColor(),
+          ...getPadding(),
+        },
+        fullWidth && styles.fullWidth,
+        style,
+      ]}
       onPress={onPress}
       disabled={disabled || loading}
-      style={[buttonStyles, variant === 'primary' && styles.primary, variant === 'secondary' && styles.secondary]}
       activeOpacity={0.8}
     >
       {loading ? (
-        <ActivityIndicator
-          color={variant === 'primary' ? '#FFFFFF' : '#2171C1'}
-          size={size === 'small' ? 'small' : 'small'}
-        />
+        <ActivityIndicator color={getTextColor()} />
       ) : (
-        <Text style={textStyles}>{title}</Text>
+        <>
+          {leftIcon && (
+            <MaterialCommunityIcons
+              name={leftIcon}
+              size={getFontSize() + 2}
+              color={getTextColor()}
+              style={styles.icon}
+            />
+          )}
+          <Text
+            style={[
+              styles.text,
+              {
+                color: getTextColor(),
+                fontSize: getFontSize(),
+              },
+            ]}
+          >
+            {title}
+          </Text>
+        </>
       )}
     </TouchableOpacity>
   );
@@ -96,10 +127,12 @@ export function Button({
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: 12,
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    justifyContent: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   fullWidth: {
     width: '100%',
@@ -108,35 +141,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  // Primary variant
-  primary: {
-    backgroundColor: '#2171C1',
-  },
-  primaryText: {
-    color: '#FFFFFF',
-  },
-  // Secondary variant
-  secondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: '#2171C1',
-  },
-  secondaryText: {
-    color: '#2171C1',
-  },
-  // Text variant
-  textButton: {
-    backgroundColor: 'transparent',
-    paddingHorizontal: 8,
-  },
-  textText: {
-    color: '#2171C1',
-  },
-  // Disabled state
-  disabled: {
-    opacity: 0.5,
-  },
-  disabledText: {
-    opacity: 0.5,
+  icon: {
+    marginRight: 6,
   },
 }); 

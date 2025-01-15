@@ -1,6 +1,6 @@
 todo:
 change components to make it prettier.
-
+center elements to make prettier.
 
 Here are all the components we've created:
 

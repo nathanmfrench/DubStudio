@@ -2,11 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-type PlatformType = 'instagram' | 'youtube' | 'facebook';
 type Status = 'connected' | 'disconnected' | 'pending' | 'error';
 
 interface ListItemProps {
-  platform: PlatformType;
   accountName: string;
   subtitle?: string;
   status?: Status;
@@ -15,26 +13,12 @@ interface ListItemProps {
 }
 
 export function ListItem({
-  platform,
   accountName,
   subtitle,
   status = 'disconnected',
   language,
   onPress,
 }: ListItemProps) {
-  const getPlatformIcon = () => {
-    switch (platform) {
-      case 'instagram':
-        return 'instagram';
-      case 'youtube':
-        return 'youtube';
-      case 'facebook':
-        return 'facebook';
-      default:
-        return 'account';
-    }
-  };
-
   const getStatusColor = () => {
     switch (status) {
       case 'connected':
@@ -70,13 +54,13 @@ export function ListItem({
       <View style={styles.content}>
         <View style={styles.platformIcon}>
           <MaterialCommunityIcons
-            name={getPlatformIcon()}
+            name="instagram"
             size={24}
             color="#2171C1"
           />
         </View>
         <View style={styles.info}>
-          <Text style={styles.username}>{accountName}</Text>
+          <Text style={styles.accountName}>@{accountName}</Text>
           {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
         </View>
         <View style={[styles.status, { backgroundColor: getStatusColor() }]}>
@@ -135,15 +119,10 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 12,
   },
-  username: {
+  accountName: {
     fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
-  },
-  accountName: {
-    fontSize: 12,
-    color: '#2171C1',
-    marginTop: 2,
   },
   subtitle: {
     fontSize: 12,

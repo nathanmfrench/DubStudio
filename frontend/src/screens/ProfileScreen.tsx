@@ -1,26 +1,19 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-
-type ProfileStackParamList = {
-  ProfileMain: undefined;
-  ComponentsPreview: undefined;
-};
-
-type ProfileScreenNavigationProp = NativeStackNavigationProp<ProfileStackParamList, 'ProfileMain'>;
 
 export function ProfileScreen() {
-  const navigation = useNavigation<ProfileScreenNavigationProp>();
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
+        <Text style={styles.title}>Profile</Text>
         <Button
-          title="View Components Preview"
-          onPress={() => navigation.navigate('ComponentsPreview')}
+          title="Sign Out"
+          variant="secondary"
+          leftIcon="logout"
+          onPress={() => {}}
+          style={styles.button}
         />
       </View>
     </SafeAreaView>
@@ -33,9 +26,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
   },
   content: {
-    flex: 1,
     padding: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2171C1',
+    marginBottom: 24,
+  },
+  button: {
+    marginTop: 8,
   },
 }); 
