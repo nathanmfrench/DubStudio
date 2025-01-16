@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    "target": "ES2018",
     "module": "commonjs",
     "lib": [
-      "es2020",
+      "es2018",
       "dom"
     ],
     "declaration": true,
@@ -22,10 +22,15 @@
     "strictPropertyInitialization": false,
     "typeRoots": [
       "./node_modules/@types"
-    ]
+    ],
+    "outDir": "dist",
+    "rootDir": ".",
+    "esModuleInterop": true
   },
+  "include": ["bin/**/*", "lib/**/*", "src/**/*"],
   "exclude": [
     "node_modules",
+    "dist",
     "cdk.out"
   ]
 }
