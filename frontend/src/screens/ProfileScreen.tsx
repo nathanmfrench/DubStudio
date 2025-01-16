@@ -1,10 +1,11 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform, Dimensions } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform, Dimensions, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
@@ -24,6 +25,24 @@ const analyticsSummary: AnalyticsSummary = {
 };
 
 export function ProfileScreen() {
+  const { signOut } = useAuth();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await signOut();
+    } catch (error: any) {
+      console.error('Error signing out:', error);
+      Alert.alert(
+        'Sign Out Failed',
+        error.message || 'Failed to sign out. Please try again.'
+      );
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
+
   const formatNumber = (num: number): string => {
     if (num >= 1000000) {
       return (num / 1000000).toFixed(1) + 'M';
@@ -37,18 +56,26 @@ export function ProfileScreen() {
   const renderSettingsItem = (
     icon: keyof typeof MaterialCommunityIcons.glyphMap,
     title: string,
-    subtitle?: string,
-    onPress?: () => void,
+    subtitle: string,
+    onPress?: () => void
   ) => (
-    <TouchableOpacity style={styles.settingsItem} onPress={onPress}>
-      <View style={styles.settingsIcon}>
-        <MaterialCommunityIcons name={icon} size={24} color="#2171C1" />
+    <TouchableOpacity
+      style={styles.settingsItem}
+      onPress={onPress}
+      disabled={title === 'Sign Out' && isSigningOut}
+    >
+      <View style={styles.settingsItemLeft}>
+        <MaterialCommunityIcons name={icon} size={24} color="#6B7280" />
+        <View style={styles.settingsItemText}>
+          <Text style={styles.settingsItemTitle}>{title}</Text>
+          <Text style={styles.settingsItemSubtitle}>{subtitle}</Text>
+        </View>
       </View>
-      <View style={styles.settingsContent}>
-        <Text style={styles.settingsTitle}>{title}</Text>
-        {subtitle && <Text style={styles.settingsSubtitle}>{subtitle}</Text>}
-      </View>
-      <MaterialCommunityIcons name="chevron-right" size={24} color="#9CA3AF" />
+      {title === 'Sign Out' && isSigningOut ? (
+        <ActivityIndicator color="#6B7280" />
+      ) : (
+        <MaterialCommunityIcons name="chevron-right" size={24} color="#6B7280" />
+      )}
     </TouchableOpacity>
   );
 
@@ -140,17 +167,7 @@ export function ProfileScreen() {
           {renderSettingsItem('bell-outline', 'Notifications', 'Manage your notifications')}
           {renderSettingsItem('help-circle-outline', 'Help & Support', 'Get help with DubStudio')}
           {renderSettingsItem('information-outline', 'About', 'App version and information')}
-        </View>
-
-        {/* Sign Out Button */}
-        <View style={styles.signOutContainer}>
-          <Button
-            title="Sign Out"
-            variant="secondary"
-            leftIcon="logout"
-            onPress={() => {}}
-            style={styles.signOutButton}
-          />
+          {renderSettingsItem('logout', 'Sign Out', 'Sign out of your account', handleSignOut)}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -245,28 +262,27 @@ const styles = StyleSheet.create({
   settingsItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 12,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: '#E5E7EB',
   },
-  settingsIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#EFF6FF',
-    justifyContent: 'center',
+  settingsItemLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12,
-  },
-  settingsContent: {
     flex: 1,
   },
-  settingsTitle: {
+  settingsItemText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  settingsItemTitle: {
     fontSize: 16,
     fontWeight: '500',
     color: '#1F2937',
   },
-  settingsSubtitle: {
+  settingsItemSubtitle: {
     fontSize: 14,
     color: '#6B7280',
     marginTop: 2,
