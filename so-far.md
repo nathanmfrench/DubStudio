@@ -9,7 +9,7 @@ Now your project is initialized with both frontend and backend! Here's what we'v
    - AsyncStorage for local storage
 
 2. **Backend (Node.js with TypeScript)**:
-   - Express.js server
+   - Express.js server dependencies
    - TypeScript configuration
    - Development dependencies for TypeScript
    - CORS middleware
