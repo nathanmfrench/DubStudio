@@ -1,5 +1,5 @@
 todo:
-
+time zone optimization for each rwgion, post scheduling
 maybe make it so that you have to pay extra for the dashboards (these can be pricey with many users)
 fix dashboards to look better
 change components to make it prettier.
