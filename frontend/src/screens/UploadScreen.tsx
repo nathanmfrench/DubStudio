@@ -256,21 +256,15 @@ export function UploadScreen() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             />
-            <MaterialCommunityIcons 
-              name="video-plus" 
-              size={48} 
-              color="#2171C1" 
-              style={styles.uploadIcon}
-            />
             <View style={styles.textButtonContainer}>
               <CurvedPath />
-              <Text style={styles.uploadText}>Select a video to upload</Text>
-              <Button
-                title="Choose from Gallery"
-                leftIcon="image-multiple"
-                onPress={pickVideo}
-                style={styles.button}
-              />
+              <TouchableOpacity 
+                onPress={pickVideo} 
+                activeOpacity={0.7}
+                hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+              >
+                <Text style={styles.uploadText}>select a video to upload</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -520,7 +514,7 @@ const styles = StyleSheet.create({
   },
   uploadText: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#E8F1F2',
     textAlign: 'center',
     marginBottom: 16,
     transform: [{ translateY: -8 }],
