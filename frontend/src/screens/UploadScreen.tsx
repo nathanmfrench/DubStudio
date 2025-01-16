@@ -248,9 +248,9 @@ export function UploadScreen() {
           <View style={styles.uploadCircle}>
             <LinearGradient
               colors={[
-                '#FFFFFF',
-                '#F8FAFC',
-                '#000000',
+                '#ADB6C4',
+                '#294C60',
+                '#001B2E',
               ]}
               style={[StyleSheet.absoluteFill, styles.circleGradient]}
               start={{ x: 0, y: 0 }}
