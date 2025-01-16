@@ -51,3 +51,144 @@ This completes the basic authentication setup! Here's what we've created:
      1. Upload Screen (core functionality)
      2. Accounts Screen (platform connections)
      3. Profile/Dashboard (analytics and settings)
+
+DONE WITH ALL OF THIS FOR NOW (FRONTEND STUFF)
+
+Now, its time to actually fetch data
+
+3)
+
+1. **API Client Setup**
+   - Create an API client configuration (likely using Axios)
+   - Set up base URL configuration for different environments
+   - Configure request interceptors for:
+     - Adding auth tokens from AWS Amplify
+     - Request timeouts
+     - Request retries
+   - Configure response interceptors for:
+     - Error handling
+     - Response formatting
+
+-------------------------------------------------------
+WITHIN THIS:
+
+1. **Initial Setup**
+   - Create a new directory structure:
+     ```
+     frontend/src/api/
+     ├── config/        (API configurations)
+     ├── interceptors/  (Request/response interceptors)
+     ├── types/         (TypeScript types for API)
+     └── client.ts      (Main Axios instance)
+     ```
+
+2. **Environment Configuration**
+   - Create environment-specific configs since you're using AWS:
+     - Development (local/dev environment)
+     - Staging (if needed)
+     - Production
+   - Need to align these with your AWS Amplify environments
+
+3. **Axios Client Setup Steps**
+   - Base configuration needs:
+     - Base URL from AWS environment
+     - Default timeout settings
+     - Common headers
+     - Response type configurations
+     - Credentials handling for AWS
+
+4. **AWS Integration Requirements**
+   - Need to integrate with your existing AWS Amplify setup
+   - Token management:
+     - Get JWT tokens from Amplify Auth
+     - Handle token refreshes
+     - Handle token expiration
+
+5. **Interceptor Implementation**
+   - Request Interceptors:
+     - Auth token injection from Amplify
+     - Request timing
+     - Retry logic for failed requests
+   - Response Interceptors:
+     - Error standardization
+     - Response data formatting
+     - Session handling (expired tokens)
+
+6. **Error Handling Strategy**
+   - Create custom error types:
+     - Network errors
+     - Auth errors (401/403)
+     - API errors (400/500)
+     - Timeout errors
+   - Error response formatting
+   - Retry strategies
+
+-------------------------------------------------------
+2. **Analytics Data Layer**
+   - Create hooks for the analytics data shown in ProfileScreen:
+     - `useAnalyticsSummary` (replacing the mock data)
+     - Endpoints needed:
+       - Total accounts
+       - Total followers
+       - Total views
+       - Total posts
+
+3. **Account Management Data Layer**
+   - Create hooks for the AccountsScreen:
+     - `useAccounts` for fetching connected accounts
+     - `useAccountDetails` for individual account data
+     - Endpoints needed:
+       - List accounts
+       - Account details
+       - Add/remove accounts
+
+4. **Upload Data Layer**
+   - Create hooks for the UploadScreen:
+     - `useVideoUpload` for handling video uploads
+     - `useUploadStatus` for tracking upload progress
+     - Endpoints needed:
+       - Video upload
+       - Upload status
+       - Upload configuration
+
+5. **Caching Implementation**
+   - Set up React Query or similar caching library
+   - Configure cache policies:
+     - Analytics data (short cache, frequent updates)
+     - Account list (medium cache)
+     - Account details (longer cache)
+   - Implement cache invalidation triggers:
+     - After uploads
+     - After account changes
+     - Manual refresh
+
+6. **Error Handling System**
+   - Create error types for different scenarios:
+     - Network errors
+     - Authentication errors
+     - Resource not found
+     - Validation errors
+   - Implement error boundaries
+   - Create error reporting system
+   - Set up error recovery strategies:
+     - Automatic retries
+     - Offline support
+     - Fallback UI states
+
+7. **Testing Infrastructure**
+   - Set up testing utilities for:
+     - Mock API responses
+     - Error scenarios
+     - Loading states
+   - Create test cases for:
+     - Data fetching hooks
+     - Error handling
+     - Cache behavior
+
+8. **Documentation**
+   - Document:
+     - API endpoints
+     - Hook usage
+     - Error handling patterns
+     - Caching strategies
+   - Create usage examples
