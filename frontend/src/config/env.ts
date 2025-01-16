@@ -47,7 +47,7 @@ const developmentConfig: Partial<Config> = {
 const productionConfig: Partial<Config> = {
   environment: 'production',
   api: {
-    baseUrl: Constants.expoConfig?.extra?.apiUrl || 'https://api.dubstudio.com',
+    baseUrl: Constants.expoConfig?.extra?.apiUrl || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000',
     timeout: 15000,
     retries: 2,
   },
