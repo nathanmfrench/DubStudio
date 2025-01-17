@@ -282,6 +282,7 @@ export class InfrastructureStack extends cdk.Stack {
       }),
       environment: {
         UPLOAD_BUCKET_NAME: uploadBucket.bucketName,
+        VIDEOS_TABLE_NAME: videosTable.tableName,
       },
       timeout: cdk.Duration.seconds(10),
       memorySize: 256,
@@ -297,6 +298,9 @@ export class InfrastructureStack extends cdk.Stack {
         })
       ]
     });
+
+    // Grant DynamoDB permissions to upload handler
+    videosTable.grantWriteData(uploadHandler);
 
     const processHandler = new lambda.Function(this, 'ProcessHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,

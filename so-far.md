@@ -1,3 +1,5 @@
+figure out the 4 errors (2 in tsconfig.json, 2 in process.ts with process not being found, 1 in upload.ts with the process notr being found)
+next, why use presigned URLs? What's the point of that? What are even the alterntaives?
 1)
 Now your project is initialized with both frontend and backend! Here's what we've set up:
 
