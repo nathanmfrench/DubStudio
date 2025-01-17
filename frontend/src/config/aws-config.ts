@@ -1,6 +1,7 @@
 const region = 'us-east-1';
-const userPoolId = 'us-east-1_J9JvV0AWa';
-const userPoolClientId = '41aonsge1fgmet7s2v92u1aea1';
+const userPoolId = 'us-east-1_H8AcY3ZlK';
+const userPoolClientId = '6hqhp7husqc641npi0dihj8a8b';
+const apiUrl = 'https://ve5pvzxy2d.execute-api.us-east-1.amazonaws.com/prod';
 
 export const awsConfig = {
   Auth: {
@@ -11,11 +12,11 @@ export const awsConfig = {
   }
 };
 
-// These endpoints are for your backend API, not needed for Cognito
+// These endpoints are for your backend API
 export const apiEndpoints = {
-  signIn: '/auth/signin',
-  signUp: '/auth/signup',
-  confirmSignUp: '/auth/confirm',
-  forgotPassword: '/auth/forgot-password',
-  resetPassword: '/auth/reset-password',
+  videos: {
+    upload: `${apiUrl}/v1/videos`,
+    process: (videoId: string) => `${apiUrl}/v1/videos/${videoId}/process`,
+    status: (videoId: string) => `${apiUrl}/v1/videos/${videoId}/status`,
+  },
 }; 

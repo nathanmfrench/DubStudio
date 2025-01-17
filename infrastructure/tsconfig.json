@@ -27,10 +27,11 @@
     "rootDir": ".",
     "esModuleInterop": true
   },
-  "include": ["bin/**/*", "lib/**/*", "src/**/*"],
+  "include": ["bin/**/*", "lib/**/*"],
   "exclude": [
     "node_modules",
     "dist",
-    "cdk.out"
+    "cdk.out",
+    "lambda"
   ]
 }

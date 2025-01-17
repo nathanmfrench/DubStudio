@@ -22,14 +22,14 @@ export interface Config {
 const defaultConfig: Config = {
   environment: 'development',
   api: {
-    baseUrl: 'http://localhost:3000',
+    baseUrl: 'https://ve5pvzxy2d.execute-api.us-east-1.amazonaws.com/prod',
     timeout: 10000,
     retries: 3,
   },
   aws: {
     region: 'us-east-1',
-    userPoolId: 'us-east-1_J9JvV0AWa',
-    userPoolClientId: '41aonsge1fgmet7s2v92u1aea1',
+    userPoolId: 'us-east-1_H8AcY3ZlK',
+    userPoolClientId: '6hqhp7husqc641npi0dihj8a8b',
   },
 };
 
@@ -37,7 +37,7 @@ const defaultConfig: Config = {
 const developmentConfig: Partial<Config> = {
   environment: 'development',
   api: {
-    baseUrl: Constants.expoConfig?.extra?.apiUrl || 'http://localhost:3000',
+    baseUrl: Constants.expoConfig?.extra?.apiUrl || 'https://ve5pvzxy2d.execute-api.us-east-1.amazonaws.com/prod',
     timeout: 10000,
     retries: 3,
   },
@@ -47,7 +47,7 @@ const developmentConfig: Partial<Config> = {
 const productionConfig: Partial<Config> = {
   environment: 'production',
   api: {
-    baseUrl: Constants.expoConfig?.extra?.apiUrl || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000',
+    baseUrl: Constants.expoConfig?.extra?.apiUrl || process.env.EXPO_PUBLIC_API_URL || 'https://ve5pvzxy2d.execute-api.us-east-1.amazonaws.com/prod',
     timeout: 15000,
     retries: 2,
   },

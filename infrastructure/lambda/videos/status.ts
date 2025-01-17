@@ -1,11 +1,11 @@
-import { APIGatewayProxyHandler } from 'aws-lambda';
+import { Handler } from 'aws-lambda';
 import { DynamoDB } from 'aws-sdk';
 import { success, error, AuthenticatedEvent } from '../types/api';
 
 const dynamodb = new DynamoDB.DocumentClient();
 const TABLE_NAME = process.env.VIDEOS_TABLE_NAME || '';
 
-export const handler: APIGatewayProxyHandler = async (event: AuthenticatedEvent) => {
+export const handler: Handler<AuthenticatedEvent> = async (event) => {
   try {
     const videoId = event.pathParameters?.videoId;
     if (!videoId) {

@@ -1,11 +1,11 @@
-import { APIGatewayProxyHandler } from 'aws-lambda';
+import { Handler } from 'aws-lambda';
 import { S3 } from 'aws-sdk';
 import { success, error, AuthenticatedEvent } from '../types/api';
 
 const s3 = new S3();
 const BUCKET_NAME = process.env.UPLOAD_BUCKET_NAME || '';
 
-export const handler: APIGatewayProxyHandler = async (event: AuthenticatedEvent) => {
+export const handler: Handler<AuthenticatedEvent> = async (event) => {
   try {
     if (!event.body) {
       return error(400, 'Missing request body');

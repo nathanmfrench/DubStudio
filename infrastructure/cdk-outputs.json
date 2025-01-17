@@ -1,0 +1,8 @@
+{
+  "InfrastructureStack": {
+    "UserPoolClientId": "6hqhp7husqc641npi0dihj8a8b",
+    "UserPoolId": "us-east-1_H8AcY3ZlK",
+    "ApiUrl": "https://ve5pvzxy2d.execute-api.us-east-1.amazonaws.com/prod/",
+    "DubStudioApiEndpointB71F861D": "https://ve5pvzxy2d.execute-api.us-east-1.amazonaws.com/prod/"
+  }
+}
