@@ -327,6 +327,16 @@ export class InfrastructureStack extends cdk.Stack {
         UPLOAD_BUCKET_NAME: uploadBucket.bucketName,
         VIDEOS_TABLE_NAME: videosTable.tableName,
       },
+      initialPolicy: [
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'dynamodb:GetItem',
+            'dynamodb:UpdateItem'
+          ],
+          resources: [videosTable.tableArn]
+        })
+      ]
     });
 
     const statusHandler = new lambda.Function(this, 'StatusHandler', {
