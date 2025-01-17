@@ -88,6 +88,21 @@ export class InfrastructureStack extends cdk.Stack {
           iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
           iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonAPIGatewayInvokeFullAccess'),
         ],
+        inlinePolicies: {
+          'CognitoAccess': new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  'cognito-idp:AdminConfirmSignUp',
+                  'cognito-idp:AdminInitiateAuth',
+                  'cognito-idp:InitiateAuth'
+                ],
+                resources: ['*']
+              })
+            ]
+          })
+        }
       }),
     });
 
@@ -258,7 +273,7 @@ export class InfrastructureStack extends cdk.Stack {
             'npm run build && ' +
             'mkdir -p /asset-output/dist && ' +
             'cp -r dist/* /asset-output/dist/ && ' +
-            'cp package.json /asset-output/ && ' +
+            'cp package.json package-lock.json /asset-output/ && ' +
             'cd /asset-output && ' +
             'npm ci --production'
           ],
@@ -286,7 +301,24 @@ export class InfrastructureStack extends cdk.Stack {
     const processHandler = new lambda.Function(this, 'ProcessHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'dist/videos/process.handler',
-      code: lambda.Code.fromAsset('lambda'),
+      code: lambda.Code.fromAsset('lambda', {
+        bundling: {
+          image: lambda.Runtime.NODEJS_18_X.bundlingImage,
+          command: [
+            'bash', '-c',
+            'mkdir -p /tmp/npm && ' +
+            'npm config set cache /tmp/npm && ' +
+            'npm ci && ' +
+            'npm run build && ' +
+            'mkdir -p /asset-output/dist && ' +
+            'cp -r dist/* /asset-output/dist/ && ' +
+            'cp package.json package-lock.json /asset-output/ && ' +
+            'cd /asset-output && ' +
+            'npm ci --production'
+          ],
+          user: 'root'
+        }
+      }),
       environment: {
         UPLOAD_BUCKET_NAME: uploadBucket.bucketName,
         VIDEOS_TABLE_NAME: videosTable.tableName,
@@ -296,7 +328,24 @@ export class InfrastructureStack extends cdk.Stack {
     const statusHandler = new lambda.Function(this, 'StatusHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'dist/videos/status.handler',
-      code: lambda.Code.fromAsset('lambda'),
+      code: lambda.Code.fromAsset('lambda', {
+        bundling: {
+          image: lambda.Runtime.NODEJS_18_X.bundlingImage,
+          command: [
+            'bash', '-c',
+            'mkdir -p /tmp/npm && ' +
+            'npm config set cache /tmp/npm && ' +
+            'npm ci && ' +
+            'npm run build && ' +
+            'mkdir -p /asset-output/dist && ' +
+            'cp -r dist/* /asset-output/dist/ && ' +
+            'cp package.json package-lock.json /asset-output/ && ' +
+            'cd /asset-output && ' +
+            'npm ci --production'
+          ],
+          user: 'root'
+        }
+      }),
       environment: {
         VIDEOS_TABLE_NAME: videosTable.tableName,
       },
