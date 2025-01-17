@@ -2,9 +2,9 @@
   "name": "dubstudio-lambda-functions",
   "version": "1.0.0",
   "description": "Lambda functions for DubStudio",
-  "main": "index.js",
+  "main": "dist/videos/upload.js",
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf dist && tsc",
     "test": "jest"
   },
   "dependencies": {
@@ -15,4 +15,4 @@
     "@types/node": "^20.11.5",
     "typescript": "^5.3.3"
   }
-} 
+}

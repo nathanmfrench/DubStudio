@@ -17,16 +17,17 @@
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
     "typeRoots": ["./node_modules/@types"],
-    "outDir": "./dist",
+    "outDir": "dist",
     "rootDir": ".",
     "esModuleInterop": true
   },
   "include": [
-    "**/*.ts"
+    "videos/**/*.ts",
+    "types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
     "**/*.test.ts"
   ]
-} 
+}
