@@ -8,7 +8,7 @@ import { ListItem } from '../components/ListItem';
 import { Modal } from '../components/Modal';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
-import { fetchAuthSession, getCurrentUser } from 'aws-amplify/auth';
+import { fetchAuthSession, getCurrentUser, signOut } from 'aws-amplify/auth';
 import { apiEndpoints } from '../config/aws-config';
 import { config } from '../config/env';
 
@@ -396,15 +396,28 @@ export function UploadScreen() {
       setIsUploading(true);
       
       // Get the current auth session
+      console.log('Getting auth session...');
       const session = await fetchAuthSession();
-      console.log('Auth session:', {
-        accessToken: session.tokens?.accessToken ? 'present' : 'missing',
-        idToken: session.tokens?.idToken ? 'present' : 'missing',
-        hasTokens: !!session.tokens?.accessToken && !!session.tokens?.idToken,
-        tokenDetails: session.tokens?.idToken ? {
-          payload: session.tokens.idToken.payload,
-          tokenString: session.tokens.idToken.toString()
-        } : null
+      
+      // Log full token details
+      const idToken = session.tokens?.idToken;
+      const accessToken = session.tokens?.accessToken;
+      
+      console.log('Token Details:', {
+        idToken: idToken ? {
+          payload: idToken.payload,
+          tokenUse: idToken.payload.token_use,
+          expiration: idToken.payload.exp ? new Date(idToken.payload.exp * 1000).toISOString() : 'No expiration',
+          isExpired: idToken.payload.exp ? Date.now() > idToken.payload.exp * 1000 : true,
+          scopes: idToken.payload.scope?.split(' ') || []
+        } : 'No ID Token',
+        accessToken: accessToken ? {
+          payload: accessToken.payload,
+          tokenUse: accessToken.payload.token_use,
+          expiration: accessToken.payload.exp ? new Date(accessToken.payload.exp * 1000).toISOString() : 'No expiration',
+          isExpired: accessToken.payload.exp ? Date.now() > accessToken.payload.exp * 1000 : true,
+          scopes: accessToken.payload.scope?.split(' ') || []
+        } : 'No Access Token'
       });
 
       // Make the request to get an upload URL
@@ -413,92 +426,114 @@ export function UploadScreen() {
         throw new Error('No authentication token available');
       }
 
-      console.log('Making upload URL request to:', apiEndpoints.videos.upload);
-      console.log('Authorization header:', `Bearer ${token}`);
-
-      const response = await fetch(apiEndpoints.videos.upload, {
-        method: 'POST',
+      const uploadUrl = apiEndpoints.videos.upload;
+      console.log('Making request to:', {
+        url: uploadUrl,
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          fileName: selectedVideo.name,
-          fileType: selectedVideo.type
-        })
+          Authorization: `Bearer ${token.substring(0, 20)}...`,
+          tokenType: 'ID Token',
+          tokenLength: token.length,
+          method: 'POST',
+          contentType: 'application/json'
+        }
       });
 
-      console.log('Upload URL response status:', response.status);
-      const responseText = await response.text();
-      console.log('Upload URL response body:', responseText);
+      try {
+        const response = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            fileName: selectedVideo.name,
+            fileType: selectedVideo.type
+          })
+        });
 
-      if (!response.ok) {
-        try {
-          const errorData = JSON.parse(responseText);
-          throw new Error(errorData.error || `Failed to get upload URL: ${response.status} ${response.statusText}`);
-        } catch (e) {
+        console.log('Upload URL response:', {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+
+        const responseText = await response.text();
+        console.log('Response body:', responseText);
+
+        if (!response.ok) {
           throw new Error(`Failed to get upload URL: ${response.status} ${response.statusText} - ${responseText}`);
         }
-      }
 
-      let uploadData;
-      try {
-        uploadData = JSON.parse(responseText);
-      } catch (e) {
-        throw new Error('Invalid JSON response from upload URL endpoint');
-      }
+        let uploadData: UploadResponse;
+        try {
+          uploadData = JSON.parse(responseText);
+          console.log('Parsed response:', uploadData);
 
-      if (!uploadData.videoId || !uploadData.uploadUrl) {
-        throw new Error('Missing required fields in upload URL response');
-      }
+          if (!uploadData.videoId || !uploadData.uploadUrl) {
+            throw new Error('Missing required fields in upload URL response');
+          }
 
-      console.log('Received upload URL for video ID:', uploadData.videoId);
-
-      // Get the video blob and content type
-      const videoResponse = await fetch(selectedVideo.uri);
-      if (!videoResponse.ok) {
-        throw new Error('Failed to read video file');
-      }
-      const videoBlob = await videoResponse.blob();
-      const contentType = videoResponse.headers.get('content-type') || 'video/mp4';
-
-      // Upload video to S3
-      const uploadResponse = await fetch(uploadData.uploadUrl, {
-        method: 'PUT',
-        body: videoBlob,
-        headers: {
-          'Content-Type': contentType,
+          console.log('Received upload URL for video ID:', uploadData.videoId);
+        } catch (e) {
+          console.error('Failed to parse response:', e);
+          throw new Error('Invalid JSON response from upload URL endpoint');
         }
-      });
 
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload video');
+        // Get the video blob and content type
+        const videoResponse = await fetch(selectedVideo.uri);
+        if (!videoResponse.ok) {
+          throw new Error('Failed to read video file');
+        }
+        const videoBlob = await videoResponse.blob();
+        const contentType = videoResponse.headers.get('content-type') || 'video/mp4';
+
+        // Upload video to S3
+        const uploadResponse = await fetch(uploadData.uploadUrl, {
+          method: 'PUT',
+          body: videoBlob,
+          headers: {
+            'Content-Type': contentType,
+          }
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error('Failed to upload video');
+        }
+
+        // Start processing
+        const processResponse = await fetch(apiEndpoints.videos.process(uploadData.videoId), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            sourceLanguage: 'en', // Default to English as source
+            targetLanguages: captionDetails.targetLanguages,
+            caption: captionDetails.caption
+          })
+        });
+
+        if (!processResponse.ok) {
+          const errorData = await processResponse.json();
+          throw new Error(errorData.error || 'Failed to start processing');
+        }
+
+        Alert.alert(
+          'Success',
+          'Video uploaded successfully! Processing will begin shortly.',
+          [{ text: 'OK', onPress: resetState }]
+        );
+
+      } catch (fetchError: unknown) {
+        console.error('Fetch error details:', {
+          name: fetchError instanceof Error ? fetchError.name : 'Unknown',
+          message: fetchError instanceof Error ? fetchError.message : String(fetchError),
+          cause: fetchError instanceof Error ? fetchError.cause : undefined,
+          stack: fetchError instanceof Error ? fetchError.stack : undefined
+        });
+        throw fetchError;
       }
-
-      // Start processing
-      const processResponse = await fetch(apiEndpoints.videos.process(uploadData.videoId), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          sourceLanguage: 'en', // Default to English as source
-          targetLanguages: captionDetails.targetLanguages,
-          caption: captionDetails.caption
-        })
-      });
-
-      if (!processResponse.ok) {
-        const errorData = await processResponse.json();
-        throw new Error(errorData.error || 'Failed to start processing');
-      }
-
-      Alert.alert(
-        'Success',
-        'Video uploaded successfully! Processing will begin shortly.',
-        [{ text: 'OK', onPress: resetState }]
-      );
 
     } catch (error: any) {
       console.error('Upload error:', error);

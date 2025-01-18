@@ -8,6 +8,7 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 import * as path from 'path';
+import * as logs from 'aws-cdk-lib/aws-logs';
 
 export class InfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -175,6 +176,7 @@ export class InfrastructureStack extends cdk.Stack {
         adminUserPassword: true,
         userPassword: true,
         custom: true,
+        userSrp: true
       },
       accessTokenValidity: cdk.Duration.minutes(60),
       idTokenValidity: cdk.Duration.minutes(60),
@@ -182,17 +184,24 @@ export class InfrastructureStack extends cdk.Stack {
       enableTokenRevocation: true,
       oAuth: {
         flows: {
-          implicitCodeGrant: true,
           authorizationCodeGrant: true,
+          implicitCodeGrant: true,
         },
         scopes: [
           cognito.OAuthScope.OPENID,
           cognito.OAuthScope.EMAIL,
           cognito.OAuthScope.PROFILE,
-          cognito.OAuthScope.COGNITO_ADMIN
         ],
       },
       preventUserExistenceErrors: true
+    });
+
+    // Create IAM role for API Gateway CloudWatch logging
+    const apiGatewayLoggingRole = new iam.Role(this, 'ApiGatewayCloudWatchRole', {
+      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonAPIGatewayPushToCloudWatchLogs')
+      ]
     });
 
     // Create REST API
@@ -201,6 +210,24 @@ export class InfrastructureStack extends cdk.Stack {
       description: 'API for DubStudio application',
       endpointConfiguration: {
         types: [apigateway.EndpointType.REGIONAL]
+      },
+      cloudWatchRole: true, // Let API Gateway create and use its own role
+      deployOptions: {
+        loggingLevel: apigateway.MethodLoggingLevel.INFO,
+        dataTraceEnabled: true,
+        tracingEnabled: true,
+        accessLogDestination: new apigateway.LogGroupLogDestination(new logs.LogGroup(this, 'ApiGatewayAccessLogs')),
+        accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields({
+          caller: true,
+          httpMethod: true,
+          ip: true,
+          protocol: true,
+          requestTime: true,
+          resourcePath: true,
+          responseLength: true,
+          status: true,
+          user: true
+        })
       },
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
@@ -374,9 +401,9 @@ export class InfrastructureStack extends cdk.Stack {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
       authorizationScopes: [
-        'openid',
-        'email',
-        'profile'
+        cognito.OAuthScope.OPENID.scopeName,
+        cognito.OAuthScope.EMAIL.scopeName,
+        cognito.OAuthScope.PROFILE.scopeName
       ]
     });
 
@@ -384,9 +411,9 @@ export class InfrastructureStack extends cdk.Stack {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
       authorizationScopes: [
-        'openid',
-        'email',
-        'profile'
+        cognito.OAuthScope.OPENID.scopeName,
+        cognito.OAuthScope.EMAIL.scopeName,
+        cognito.OAuthScope.PROFILE.scopeName
       ]
     });
 
@@ -394,9 +421,9 @@ export class InfrastructureStack extends cdk.Stack {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
       authorizationScopes: [
-        'openid',
-        'email',
-        'profile'
+        cognito.OAuthScope.OPENID.scopeName,
+        cognito.OAuthScope.EMAIL.scopeName,
+        cognito.OAuthScope.PROFILE.scopeName
       ]
     });
 
