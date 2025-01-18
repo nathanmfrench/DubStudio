@@ -188,19 +188,14 @@ export class InfrastructureStack extends cdk.Stack {
     const commonBundlingConfig = {
       image: lambda.Runtime.NODEJS_18_X.bundlingImage,
       environment: {
-        NODE_ENV: 'production',
+        NODE_ENV: 'production'
       },
       command: [
         'bash', '-c',
         [
-          'cp package.json tsconfig.json /asset-output/',
-          'cd /asset-output',
-          'npm install --production',
-          'cp -r /asset-input/src/* .',
-          'npm install -g typescript',
-          'tsc',
-          'cp -r dist/* .',
-          'rm -rf node_modules tsconfig.json package.json src dist'
+          'cp -r /asset-input/src/* /asset-output/',
+          'cp -r /asset-input/node_modules /asset-output/',
+          'cp /asset-input/package.json /asset-output/'
         ].join(' && ')
       ],
       workingDirectory: '/asset-input',
@@ -209,7 +204,7 @@ export class InfrastructureStack extends cdk.Stack {
     
     const uploadHandler = new lambda.Function(this, 'UploadHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'upload.handler',
+      handler: 'videos/upload.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {
         bundling: commonBundlingConfig
       }),
@@ -221,31 +216,30 @@ export class InfrastructureStack extends cdk.Stack {
       memorySize: 256
     });
 
-
     const processHandler = new lambda.Function(this, 'ProcessHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'videos/process.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {  // Changed from '../lambda/src' to '../lambda'
-        bundling: commonBundlingConfig  // Use the same working config
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {
+        bundling: commonBundlingConfig
       }),
       environment: {
-        VIDEOS_TABLE_NAME: videosTable.tableName
+        TABLE_NAME: videosTable.tableName
       },
-      timeout: cdk.Duration.seconds(30),  // Added timeout
-      memorySize: 256  // Added memory size
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256
     });
-    
+
     const statusHandler = new lambda.Function(this, 'StatusHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'videos/status.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {  // Changed from '../lambda/src' to '../lambda'
-        bundling: commonBundlingConfig  // Use the same working config
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {
+        bundling: commonBundlingConfig
       }),
       environment: {
-        VIDEOS_TABLE_NAME: videosTable.tableName
+        TABLE_NAME: videosTable.tableName
       },
-      timeout: cdk.Duration.seconds(30),  // Added timeout
-      memorySize: 256  // Added memory size
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256
     });
     // Create IAM role for API Gateway execution
     const apiGatewayRole = new iam.Role(this, 'ApiGatewayExecutionRole', {
