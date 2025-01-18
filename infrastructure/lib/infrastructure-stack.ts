@@ -172,18 +172,7 @@ export class InfrastructureStack extends cdk.Stack {
     const userPoolClient = userPool.addClient('DubStudioUserPoolClient', {
       authFlows: {
         userPassword: true,
-        userSrp: true
-      },
-      oAuth: {
-        flows: {
-          implicitCodeGrant: true,
-          authorizationCodeGrant: true
-        },
-        scopes: [
-          cognito.OAuthScope.OPENID,
-          cognito.OAuthScope.EMAIL,
-          cognito.OAuthScope.PROFILE,
-        ],
+        userSrp: false
       },
       accessTokenValidity: cdk.Duration.minutes(60),
       idTokenValidity: cdk.Duration.minutes(60),
@@ -196,15 +185,6 @@ export class InfrastructureStack extends cdk.Stack {
       ]
     });
 
-    // Create IAM role for API Gateway CloudWatch logging
-    const apiGatewayLoggingRole = new iam.Role(this, 'ApiGatewayCloudWatchRole', {
-      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonAPIGatewayPushToCloudWatchLogs')
-      ]
-    });
-
-    // Common bundling configuration for Lambda functions
     const commonBundlingConfig = {
       image: lambda.Runtime.NODEJS_18_X.bundlingImage,
       environment: {
@@ -213,164 +193,226 @@ export class InfrastructureStack extends cdk.Stack {
       command: [
         'bash', '-c',
         [
-          'cp -r /asset-input/dist/videos/* /asset-output/',
-          'cp -r /asset-input/node_modules /asset-output/',
-          'cp /asset-input/package.json /asset-output/'
+          'cp package.json tsconfig.json /asset-output/',
+          'cd /asset-output',
+          'npm install --production',
+          'cp -r /asset-input/src/* .',
+          'npm install -g typescript',
+          'tsc',
+          'cp -r dist/* .',
+          'rm -rf node_modules tsconfig.json package.json src dist'
         ].join(' && ')
       ],
       workingDirectory: '/asset-input',
       user: 'root'
     };
-
-    // Create Lambda functions
+    
     const uploadHandler = new lambda.Function(this, 'UploadHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'videos/upload.handler',
+      handler: 'upload.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {
         bundling: commonBundlingConfig
       }),
       environment: {
         BUCKET_NAME: bucket.bucketName,
-        PROCESS_FUNCTION_NAME: `${this.stackName}-ProcessHandler`,
         TABLE_NAME: videosTable.tableName
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 256
     });
 
+
     const processHandler = new lambda.Function(this, 'ProcessHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'videos/process.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {
-        bundling: commonBundlingConfig
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {  // Changed from '../lambda/src' to '../lambda'
+        bundling: commonBundlingConfig  // Use the same working config
       }),
       environment: {
-        BUCKET_NAME: bucket.bucketName,
-        TABLE_NAME: videosTable.tableName,
-        DUBBING_FUNCTION_NAME: `${this.stackName}-DubbingHandler`
+        VIDEOS_TABLE_NAME: videosTable.tableName
       },
-      timeout: cdk.Duration.minutes(15),
-      memorySize: 1024,
-      initialPolicy: [
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: ['lambda:InvokeFunction'],
-          resources: ['*']
-        })
-      ]
+      timeout: cdk.Duration.seconds(30),  // Added timeout
+      memorySize: 256  // Added memory size
     });
-
-    const dubbingHandler = new lambda.Function(this, 'DubbingHandler', {
-      runtime: lambda.Runtime.PYTHON_3_9,
-      handler: 'dubbing.handler',
-      code: lambda.Code.fromAsset('lambda/python', {
-        bundling: {
-          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
-          command: [
-            'bash', '-c',
-            'pip install -r requirements.txt -t /asset-output && ' +
-            'cp dubbing.py /asset-output/'
-          ],
-          user: 'root'
-        }
-      }),
-      environment: {
-        BUCKET_NAME: bucket.bucketName,
-        TABLE_NAME: videosTable.tableName,
-        ELEVENLABS_API_KEY: elevenLabsApiKey.valueAsString
-      },
-      timeout: cdk.Duration.minutes(15),
-      memorySize: 1024
-    });
-
+    
     const statusHandler = new lambda.Function(this, 'StatusHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'videos/status.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {
-        bundling: commonBundlingConfig
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {  // Changed from '../lambda/src' to '../lambda'
+        bundling: commonBundlingConfig  // Use the same working config
       }),
       environment: {
-        TABLE_NAME: videosTable.tableName
+        VIDEOS_TABLE_NAME: videosTable.tableName
       },
-      timeout: cdk.Duration.seconds(10),
-      memorySize: 256
+      timeout: cdk.Duration.seconds(30),  // Added timeout
+      memorySize: 256  // Added memory size
+    });
+    // Create IAM role for API Gateway execution
+    const apiGatewayRole = new iam.Role(this, 'ApiGatewayExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonAPIGatewayPushToCloudWatchLogs')
+      ]
     });
 
-    // Grant permissions
-    bucket.grantReadWrite(uploadHandler);
-    bucket.grantReadWrite(processHandler);
-    bucket.grantReadWrite(dubbingHandler);
-    videosTable.grantReadWriteData(uploadHandler);
-    videosTable.grantReadWriteData(processHandler);
-    videosTable.grantReadWriteData(dubbingHandler);
-    videosTable.grantReadData(statusHandler);
-
-    // Update process handler's Lambda invoke permission to target specific function
-    processHandler.addToRolePolicy(
+    // Add explicit permission to invoke Lambda functions
+    apiGatewayRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['lambda:InvokeFunction'],
-        resources: [dubbingHandler.functionArn]
+        resources: [uploadHandler.functionArn, processHandler.functionArn, statusHandler.functionArn]
       })
     );
 
-    // Create REST API
+    // Grant permissions to Lambda functions
+    bucket.grantReadWrite(uploadHandler);
+    videosTable.grantReadWriteData(uploadHandler);
+    videosTable.grantReadWriteData(processHandler);
+    videosTable.grantReadWriteData(statusHandler);
+
+    // Add CloudWatch Logs permissions
+    uploadHandler.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents'
+      ],
+      resources: ['*']
+    }));
+
+    processHandler.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents'
+      ],
+      resources: ['*']
+    }));
+
+    statusHandler.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents'
+      ],
+      resources: ['*']
+    }));
+
+    // Create CloudWatch log group for API Gateway
+    const apiLogGroup = new logs.LogGroup(this, 'ApiGatewayLogGroup', {
+      logGroupName: '/aws/apigateway/dubstudio',
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    // Grant API Gateway permissions to write to the log group
+    apiLogGroup.grantWrite(new iam.ServicePrincipal('apigateway.amazonaws.com'));
+
+    // Create API Gateway
     const api = new apigateway.RestApi(this, 'DubStudioApi', {
       restApiName: 'DubStudio API',
-      description: 'API for DubStudio application',
-      endpointConfiguration: {
-        types: [apigateway.EndpointType.REGIONAL]
-      },
+      description: 'API for DubStudio video processing',
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: [
-          'Content-Type',
-          'X-Amz-Date',
-          'Authorization',
-          'X-Api-Key',
-          'X-Amz-Security-Token',
-        ],
-        allowCredentials: true,
-        maxAge: cdk.Duration.days(1)
+        allowHeaders: ['Content-Type', 'Authorization']
       },
       deployOptions: {
-        stageName: 'prod',
-        description: 'Production stage'
+        loggingLevel: apigateway.MethodLoggingLevel.INFO,
+        dataTraceEnabled: true,
+        metricsEnabled: true
       }
     });
 
-    // Create Cognito Authorizer
+    // Create authorizer
     const authorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'DubStudioAuthorizer', {
       cognitoUserPools: [userPool],
       identitySource: 'method.request.header.Authorization',
-      resultsCacheTtl: cdk.Duration.minutes(5),
+      resultsCacheTtl: cdk.Duration.minutes(0)
     });
 
-    // Default authorization for protected endpoints
+    // Default method options with authorizer
     const defaultMethodOptions: apigateway.MethodOptions = {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
-      authorizationScopes: [
-        cognito.OAuthScope.OPENID.scopeName,
-        cognito.OAuthScope.EMAIL.scopeName,
-        cognito.OAuthScope.PROFILE.scopeName
-      ]
+      authorizationScopes: ['aws.cognito.signin.user.admin']
     };
 
     // Create API resources
     const v1 = api.root.addResource('v1');
+    const videos = v1.addResource('videos');
+    const videoProcess = v1.addResource('process');
+    const videoStatus = v1.addResource('status');
 
     // Video endpoints (with authorizer)
-    const videos = v1.addResource('videos');
-    const videoId = videos.addResource('{videoId}');
-    const videoProcess = videoId.addResource('process');
-    const videoStatus = videoId.addResource('status');
+    videos.addMethod('POST', 
+      new apigateway.LambdaIntegration(uploadHandler, {
+        proxy: true,
+        passthroughBehavior: apigateway.PassthroughBehavior.WHEN_NO_MATCH,
+        integrationResponses: [{
+          statusCode: '200',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': "'*'"
+          }
+        }]
+      }), 
+      {
+        ...defaultMethodOptions,
+        methodResponses: [{
+          statusCode: '200',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': true
+          }
+        }]
+      }
+    );
 
-    // Add methods with authorizer
-    videos.addMethod('POST', new apigateway.LambdaIntegration(uploadHandler), defaultMethodOptions);
-    videoProcess.addMethod('POST', new apigateway.LambdaIntegration(processHandler), defaultMethodOptions);
-    videoStatus.addMethod('GET', new apigateway.LambdaIntegration(statusHandler), defaultMethodOptions);
+    videoProcess.addMethod('POST', 
+      new apigateway.LambdaIntegration(processHandler, {
+        proxy: true,
+        passthroughBehavior: apigateway.PassthroughBehavior.WHEN_NO_MATCH,
+        integrationResponses: [{
+          statusCode: '200',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': "'*'"
+          }
+        }]
+      }), 
+      {
+        ...defaultMethodOptions,
+        methodResponses: [{
+          statusCode: '200',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': true
+          }
+        }]
+      }
+    );
+
+    videoStatus.addMethod('GET', 
+      new apigateway.LambdaIntegration(statusHandler, {
+        proxy: true,
+        passthroughBehavior: apigateway.PassthroughBehavior.WHEN_NO_MATCH,
+        integrationResponses: [{
+          statusCode: '200',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': "'*'"
+          }
+        }]
+      }), 
+      {
+        ...defaultMethodOptions,
+        methodResponses: [{
+          statusCode: '200',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': true
+          }
+        }]
+      }
+    );
 
     // Public endpoints (no authorizer)
     const auth = v1.addResource('auth');

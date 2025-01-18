@@ -1,66 +1,78 @@
-import { Handler } from 'aws-lambda';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { success, error, AuthenticatedEvent } from '../types/api';
+import { randomUUID } from 'crypto';
+import { AuthenticatedEvent, success, error, getUserId } from '../types/api';
 
 const s3Client = new S3Client({});
-const dynamodbClient = new DynamoDBClient({});
-const dynamodb = DynamoDBDocumentClient.from(dynamodbClient);
+const ddbClient = new DynamoDBClient({});
+const ddbDocClient = DynamoDBDocumentClient.from(ddbClient);
 
-const BUCKET_NAME = process.env.UPLOAD_BUCKET_NAME || '';
-const VIDEOS_TABLE_NAME = process.env.VIDEOS_TABLE_NAME || '';
+// Match environment variable names with infrastructure stack
+const TABLE_NAME = process.env.TABLE_NAME!;
+const BUCKET_NAME = process.env.BUCKET_NAME!;
 
-export const handler: Handler<AuthenticatedEvent> = async (event) => {
+interface UploadRequestBody {
+  fileName: string;
+  fileType: string;
+}
+
+export const handler = async (event: AuthenticatedEvent) => {
   try {
-    const body = event.body ? JSON.parse(event.body) : {};
-    const { fileName, fileType } = body;
+    // Validate request method
+    if (event.httpMethod !== 'POST') {
+      return error(405, 'Method not allowed');
+    }
 
-    if (!fileName || !fileType) {
-      return error(400, 'Missing fileName or fileType in request body');
+    // Parse and validate request body
+    if (!event.body) {
+      return error(400, 'Request body is required');
+    }
+
+    const body: UploadRequestBody = JSON.parse(event.body);
+    if (!body.fileName || !body.fileType) {
+      return error(400, 'fileName and fileType are required');
     }
 
     // Get user ID from Cognito claims
-    const userId = event.requestContext.authorizer?.claims.sub;
-    if (!userId) {
-      return error(401, 'Unauthorized');
-    }
+    const userId = getUserId(event);
+    const videoId = randomUUID();
 
-    // Generate unique video ID using timestamp
-    const videoId = `${Date.now()}-${fileName}`;
-    const key = `uploads/${userId}/${videoId}`;
+    // Generate a unique key for the video
+    const key = `${userId}/${videoId}/${body.fileName}`;
 
-    // Generate pre-signed URL for upload
+    // Create presigned URL for upload
     const command = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,
-      ContentType: fileType,
+      ContentType: body.fileType
     });
-    const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
 
-    // Create DynamoDB entry
-    await dynamodb.send(new PutCommand({
-      TableName: VIDEOS_TABLE_NAME,
+    const presignedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+
+    // Create video record in DynamoDB
+    await ddbDocClient.send(new PutCommand({
+      TableName: TABLE_NAME,
       Item: {
         userId,
         videoId,
-        fileName,
-        fileType,
-        s3Key: key,
-        status: 'UPLOADED',
-        progress: 0,
+        fileName: body.fileName,
+        status: 'pending_upload',
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
+        updatedAt: new Date().toISOString()
+      }
     }));
 
+    // Return the presigned URL and video details
     return success({
+      uploadUrl: presignedUrl,
       videoId,
-      uploadUrl,
+      key
     });
+
   } catch (err) {
-    console.error('Error generating upload URL:', err);
-    return error(500, 'Error generating upload URL');
+    console.error('Error in upload handler:', err);
+    return error(500, 'Internal server error');
   }
 }; 
