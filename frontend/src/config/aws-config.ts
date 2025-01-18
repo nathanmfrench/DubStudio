@@ -18,10 +18,7 @@ const amplifyConfig = {
     Cognito: {
       userPoolId: config.aws.userPoolId,
       userPoolClientId: config.aws.userPoolClientId,
-      region: config.aws.region,
-      oauth: {
-        scopes: ['openid', 'email', 'profile']
-      }
+      region: config.aws.region
     }
   }
 };
