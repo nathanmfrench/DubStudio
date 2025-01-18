@@ -7,10 +7,18 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
+import * as path from 'path';
 
 export class InfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    // Define the ElevenLabs API key parameter
+    const elevenLabsApiKey = new cdk.CfnParameter(this, 'ElevenLabsApiKey', {
+      type: 'String',
+      description: 'API key for ElevenLabs',
+      noEcho: true // This ensures the key is not shown in logs
+    });
 
     // Create VPC
     const vpc = new ec2.Vpc(this, 'DubStudioVPC', {
@@ -192,24 +200,8 @@ export class InfrastructureStack extends cdk.Stack {
       restApiName: 'DubStudio API',
       description: 'API for DubStudio application',
       endpointConfiguration: {
-        types: [apigateway.EndpointType.PRIVATE],
-        vpcEndpoints: [apiEndpoint]
+        types: [apigateway.EndpointType.REGIONAL]
       },
-      policy: new iam.PolicyDocument({
-        statements: [
-          new iam.PolicyStatement({
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.AnyPrincipal()],
-            actions: ['execute-api:Invoke'],
-            resources: ['execute-api:/*'],
-            conditions: {
-              'StringEquals': {
-                'aws:SourceVpce': apiEndpoint.vpcEndpointId
-              }
-            }
-          })
-        ]
-      }),
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
@@ -220,6 +212,7 @@ export class InfrastructureStack extends cdk.Stack {
           'X-Api-Key',
           'X-Amz-Security-Token',
         ],
+        allowCredentials: true
       },
     });
 
@@ -258,45 +251,36 @@ export class InfrastructureStack extends cdk.Stack {
     const analyticsAccounts = analytics.addResource('accounts');
     const analyticsVideos = analytics.addResource('videos');
 
+    const commonBundlingConfig = {
+      image: lambda.Runtime.NODEJS_18_X.bundlingImage,
+      environment: {
+        NODE_ENV: 'production',
+      },
+      command: [
+        'bash', '-c',
+        [
+          'cp -r /asset-input/dist/videos/* /asset-output/',
+          'cp -r /asset-input/node_modules /asset-output/',
+          'cp /asset-input/package.json /asset-output/'
+        ].join(' && ')
+      ],
+      workingDirectory: '/asset-input',
+      user: 'root'
+    };
+
     // Create Lambda functions
     const uploadHandler = new lambda.Function(this, 'UploadHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'dist/videos/upload.handler',
-      code: lambda.Code.fromAsset('lambda', {
-        bundling: {
-          image: lambda.Runtime.NODEJS_18_X.bundlingImage,
-          command: [
-            'bash', '-c',
-            'mkdir -p /tmp/npm && ' +
-            'npm config set cache /tmp/npm && ' +
-            'npm ci && ' +
-            'npm run build && ' +
-            'mkdir -p /asset-output/dist && ' +
-            'cp -r dist/* /asset-output/dist/ && ' +
-            'cp package.json package-lock.json /asset-output/ && ' +
-            'cd /asset-output && ' +
-            'npm ci --production'
-          ],
-          user: 'root'
-        }
+      handler: 'videos/upload.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {
+        bundling: commonBundlingConfig,
       }),
-      environment: {
-        UPLOAD_BUCKET_NAME: uploadBucket.bucketName,
-        VIDEOS_TABLE_NAME: videosTable.tableName,
-      },
-      timeout: cdk.Duration.seconds(10),
+      timeout: cdk.Duration.seconds(30),
       memorySize: 256,
-      initialPolicy: [
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: [
-            's3:PutObject',
-            's3:GetObject',
-            's3:PutObjectAcl'
-          ],
-          resources: [`${uploadBucket.bucketArn}/*`]
-        })
-      ]
+      environment: {
+        BUCKET_NAME: uploadBucket.bucketName,
+        PROCESS_FUNCTION_NAME: `${this.stackName}-ProcessHandler`,
+      },
     });
 
     // Grant DynamoDB permissions to upload handler
@@ -304,21 +288,39 @@ export class InfrastructureStack extends cdk.Stack {
 
     const processHandler = new lambda.Function(this, 'ProcessHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'dist/videos/process.handler',
-      code: lambda.Code.fromAsset('lambda', {
+      handler: 'videos/process.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {
+        bundling: commonBundlingConfig
+      }),
+      environment: {
+        UPLOAD_BUCKET_NAME: uploadBucket.bucketName,
+        VIDEOS_TABLE_NAME: videosTable.tableName,
+        DUBBING_FUNCTION_NAME: `${this.stackName}-DubbingHandler`,
+      },
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
+      initialPolicy: [
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'lambda:InvokeFunction'
+          ],
+          resources: ['*']
+        })
+      ]
+    });
+
+    // Create Python dubbing function
+    const dubbingHandler = new lambda.Function(this, 'DubbingHandler', {
+      runtime: lambda.Runtime.PYTHON_3_9,
+      handler: 'dubbing.handler',
+      code: lambda.Code.fromAsset('lambda/python', {
         bundling: {
-          image: lambda.Runtime.NODEJS_18_X.bundlingImage,
+          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
           command: [
             'bash', '-c',
-            'mkdir -p /tmp/npm && ' +
-            'npm config set cache /tmp/npm && ' +
-            'npm ci && ' +
-            'npm run build && ' +
-            'mkdir -p /asset-output/dist && ' +
-            'cp -r dist/* /asset-output/dist/ && ' +
-            'cp package.json package-lock.json /asset-output/ && ' +
-            'cd /asset-output && ' +
-            'npm ci --production'
+            'pip install -r requirements.txt -t /asset-output && ' +
+            'cp dubbing.py /asset-output/'
           ],
           user: 'root'
         }
@@ -326,39 +328,30 @@ export class InfrastructureStack extends cdk.Stack {
       environment: {
         UPLOAD_BUCKET_NAME: uploadBucket.bucketName,
         VIDEOS_TABLE_NAME: videosTable.tableName,
+        ELEVENLABS_API_KEY: elevenLabsApiKey.valueAsString
       },
-      initialPolicy: [
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'dynamodb:GetItem',
-            'dynamodb:UpdateItem'
-          ],
-          resources: [videosTable.tableArn]
-        })
-      ]
+      timeout: cdk.Duration.minutes(15),
+      memorySize: 1024,
     });
+
+    // Grant permissions to dubbing handler
+    uploadBucket.grantReadWrite(dubbingHandler);
+    videosTable.grantReadWriteData(dubbingHandler);
+
+    // Update process handler's Lambda invoke permission to target specific function
+    processHandler.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['lambda:InvokeFunction'],
+        resources: [dubbingHandler.functionArn]
+      })
+    );
 
     const statusHandler = new lambda.Function(this, 'StatusHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'dist/videos/status.handler',
-      code: lambda.Code.fromAsset('lambda', {
-        bundling: {
-          image: lambda.Runtime.NODEJS_18_X.bundlingImage,
-          command: [
-            'bash', '-c',
-            'mkdir -p /tmp/npm && ' +
-            'npm config set cache /tmp/npm && ' +
-            'npm ci && ' +
-            'npm run build && ' +
-            'mkdir -p /asset-output/dist && ' +
-            'cp -r dist/* /asset-output/dist/ && ' +
-            'cp package.json package-lock.json /asset-output/ && ' +
-            'cd /asset-output && ' +
-            'npm ci --production'
-          ],
-          user: 'root'
-        }
+      handler: 'videos/status.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {
+        bundling: commonBundlingConfig
       }),
       environment: {
         VIDEOS_TABLE_NAME: videosTable.tableName,
@@ -373,7 +366,7 @@ export class InfrastructureStack extends cdk.Stack {
 
     // Connect Lambda functions to API endpoints
     videos.addMethod('POST', new apigateway.LambdaIntegration(uploadHandler), {
-      authorizer: authorizer,
+      authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
     });
 
@@ -383,6 +376,61 @@ export class InfrastructureStack extends cdk.Stack {
     });
 
     videoStatus.addMethod('GET', new apigateway.LambdaIntegration(statusHandler), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    });
+
+    // Add methods for other endpoints
+    auth.addMethod('POST', new apigateway.MockIntegration({
+      integrationResponses: [{
+        statusCode: '200',
+      }],
+      requestTemplates: {
+        'application/json': '{ "statusCode": 200 }',
+      },
+    }));
+
+    refreshToken.addMethod('POST', new apigateway.MockIntegration({
+      integrationResponses: [{
+        statusCode: '200',
+      }],
+      requestTemplates: {
+        'application/json': '{ "statusCode": 200 }',
+      },
+    }));
+
+    users.addMethod('GET', new apigateway.MockIntegration({
+      integrationResponses: [{
+        statusCode: '200',
+      }],
+      requestTemplates: {
+        'application/json': '{ "statusCode": 200 }',
+      },
+    }), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    });
+
+    userAnalytics.addMethod('GET', new apigateway.MockIntegration({
+      integrationResponses: [{
+        statusCode: '200',
+      }],
+      requestTemplates: {
+        'application/json': '{ "statusCode": 200 }',
+      },
+    }), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    });
+
+    analyticsSummary.addMethod('GET', new apigateway.MockIntegration({
+      integrationResponses: [{
+        statusCode: '200',
+      }],
+      requestTemplates: {
+        'application/json': '{ "statusCode": 200 }',
+      },
+    }), {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
     });

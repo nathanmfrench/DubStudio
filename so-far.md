@@ -1,4 +1,3 @@
-figure out the 4 errors (2 in tsconfig.json, 2 in process.ts with process not being found, 1 in upload.ts with the process notr being found)
 next, why use presigned URLs? What's the point of that? What are even the alterntaives?
 1)
 Now your project is initialized with both frontend and backend! Here's what we've set up:
@@ -196,6 +195,25 @@ WITHIN THIS:
    - Create usage examples
 
 
+The flow looks good! Here's how it works:
+Upload Handler (upload.ts):
+Generates a pre-signed S3 URL for frontend to upload video
+Creates entry in DynamoDB with status "UPLOADED"
+Returns videoId and uploadUrl to frontend
+Process Handler (process.ts):
+Takes videoId and target languages
+Invokes Python dubbing function for each target language
+Updates status to "PROCESSING"
+Dubbing Handler (dubbing.py):
+Downloads video from S3
+Uses ElevenLabs API to dub the video
+Updates progress in DynamoDB
+Uploads dubbed video back to S3
+Updates status to "COMPLETED"
+Status Handler (status.ts):
+Checks video status in DynamoDB
+Returns current status and progress
+
 api error to understand:
 Here's a breakdown of the error and how we fixed it:
 Initial Error:
@@ -225,3 +243,4 @@ Package everything for deployment
 
 Why This Matters:
 Using package-lock.json with npm ci is important in deployment scenarios because it ensures that the exact same dependencies are installed every time, making builds reproducible and preventing "it works on my machine" type problems. so to reiterate, now the error is fixed
+

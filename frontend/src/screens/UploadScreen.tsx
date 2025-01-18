@@ -8,6 +8,8 @@ import { ListItem } from '../components/ListItem';
 import { Modal } from '../components/Modal';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
+import { getCurrentUser, fetchAuthSession } from 'aws-amplify/auth';
+import { apiEndpoints } from '../config/aws-config';
 
 interface VideoSelection {
   uri: string;
@@ -39,30 +41,74 @@ interface AccountMetrics {
   postsThisWeek: number;
 }
 
+interface UploadResponse {
+  videoId: string;
+  uploadUrl: string;
+}
+
 const AVAILABLE_LANGUAGES = [
+  { code: 'hi', name: 'Hindi' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'zh', name: 'Chinese' },
   { code: 'es', name: 'Spanish' },
   { code: 'fr', name: 'French' },
   { code: 'de', name: 'German' },
-  { code: 'it', name: 'Italian' },
-  { code: 'pt', name: 'Portuguese' },
-  { code: 'hi', name: 'Hindi' },
   { code: 'ja', name: 'Japanese' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'ru', name: 'Russian' },
   { code: 'ko', name: 'Korean' },
-  { code: 'zh', name: 'Chinese' },
+  { code: 'id', name: 'Indonesian' },
+  { code: 'it', name: 'Italian' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'tr', name: 'Turkish' },
+  { code: 'pl', name: 'Polish' },
+  { code: 'sv', name: 'Swedish' },
+  { code: 'fil', name: 'Filipino' },
+  { code: 'ms', name: 'Malay' },
+  { code: 'ro', name: 'Romanian' },
+  { code: 'uk', name: 'Ukrainian' },
+  { code: 'el', name: 'Greek' },
+  { code: 'cs', name: 'Czech' },
+  { code: 'da', name: 'Danish' },
+  { code: 'fi', name: 'Finnish' },
+  { code: 'bg', name: 'Bulgarian' },
+  { code: 'hr', name: 'Croatian' },
+  { code: 'sk', name: 'Slovak' },
+  { code: 'ta', name: 'Tamil' }
 ];
 
 const MAX_DURATION = 90; // 90 seconds max for Instagram Reels
 
 const LANGUAGE_SUFFIXES = {
+  en: 'english',
+  hi: 'hindi',
+  pt: 'portugues',
+  zh: 'zhongwen',
   es: 'espanol',
   fr: 'francais',
   de: 'deutsch',
-  it: 'italiano',
-  pt: 'portugues',
-  hi: 'hindi',
   ja: 'nihongo',
+  ar: 'arabi',
+  ru: 'russkiy',
   ko: 'hangugeo',
-  zh: 'zhongwen',
+  id: 'indonesia',
+  it: 'italiano',
+  nl: 'nederlands',
+  tr: 'turkce',
+  pl: 'polski',
+  sv: 'svenska',
+  fil: 'filipino',
+  ms: 'melayu',
+  ro: 'romana',
+  uk: 'ukrainska',
+  el: 'ellinika',
+  cs: 'cestina',
+  da: 'dansk',
+  fi: 'suomi',
+  bg: 'bulgarski',
+  hr: 'hrvatski',
+  sk: 'slovencina',
+  ta: 'tamil'
 };
 
 const DUMMY_METRICS: AccountMetrics = {
@@ -103,6 +149,7 @@ export function UploadScreen() {
     { platform: 'instagram', username: '@username', isConnected: false }
   ]);
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleBack = () => {
     if (step === 'details') {
@@ -309,6 +356,128 @@ export function UploadScreen() {
     </View>
   );
 
+  const resetState = () => {
+    setSelectedVideo(null);
+    setCaptionDetails({
+      caption: '',
+      targetLanguages: [],
+      id: `VID_${Date.now()}`
+    });
+    setStep('select');
+    setIsUploading(false);
+  };
+
+  const validateVideo = (video: VideoSelection): string | null => {
+    if (!video.uri) {
+      return 'Invalid video file';
+    }
+    if (video.size > 100 * 1024 * 1024) { // 100MB limit
+      return 'Video file size must be less than 100MB';
+    }
+    if (video.duration > MAX_DURATION) {
+      return `Video duration must be less than ${MAX_DURATION} seconds`;
+    }
+    return null;
+  };
+
+  const handleUpload = async () => {
+    if (!selectedVideo || !captionDetails.targetLanguages.length) {
+      Alert.alert('Error', 'Please select a video and at least one target language');
+      return;
+    }
+
+    const validationError = validateVideo(selectedVideo);
+    if (validationError) {
+      Alert.alert('Error', validationError);
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      
+      // Get the current authenticated user and session
+      const user = await getCurrentUser();
+      const session = await fetchAuthSession();
+      const token = session.tokens?.accessToken?.toString();
+      
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+      
+      // Make the API request to get the upload URL
+      const response = await fetch(apiEndpoints.videos.upload, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          videoId: captionDetails.id,
+          targetLanguages: captionDetails.targetLanguages,
+          caption: captionDetails.caption,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get upload URL');
+      }
+
+      const { videoId, uploadUrl } = await response.json();
+
+      // Get the video blob and content type
+      const videoResponse = await fetch(selectedVideo.uri);
+      if (!videoResponse.ok) {
+        throw new Error('Failed to read video file');
+      }
+      const videoBlob = await videoResponse.blob();
+      const contentType = videoResponse.headers.get('content-type') || 'video/mp4';
+
+      // Upload video to S3
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: videoBlob,
+        headers: {
+          'Content-Type': contentType,
+        }
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload video');
+      }
+
+      // Start processing
+      const processResponse = await fetch(apiEndpoints.videos.process(videoId), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          sourceLanguage: 'en', // Default to English as source
+          targetLanguages: captionDetails.targetLanguages,
+          caption: captionDetails.caption
+        })
+      });
+
+      if (!processResponse.ok) {
+        const errorData = await processResponse.json();
+        throw new Error(errorData.error || 'Failed to start processing');
+      }
+
+      Alert.alert(
+        'Success',
+        'Video uploaded successfully! Processing will begin shortly.',
+        [{ text: 'OK', onPress: resetState }]
+      );
+
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      Alert.alert('Error', error.message);
+      setIsUploading(false);
+    }
+  };
+
   const renderCaptionDetails = () => (
     <View style={styles.content}>
       <View style={styles.detailsContainer}>
@@ -414,10 +583,11 @@ export function UploadScreen() {
             style={styles.actionButton}
           />
           <Button
-            title="Upload"
+            title={isUploading ? "Uploading..." : "Upload"}
             leftIcon="cloud-upload"
-            onPress={() => {}}
+            onPress={handleUpload}
             style={styles.actionButton}
+            disabled={isUploading || !selectedVideo || captionDetails.targetLanguages.length === 0}
           />
         </View>
       </View>

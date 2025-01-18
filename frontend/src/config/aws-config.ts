@@ -1,22 +1,30 @@
-const region = 'us-east-1';
-const userPoolId = 'us-east-1_H8AcY3ZlK';
-const userPoolClientId = '6hqhp7husqc641npi0dihj8a8b';
-const apiUrl = 'https://ve5pvzxy2d.execute-api.us-east-1.amazonaws.com/prod';
+import { Amplify } from 'aws-amplify';
+import { config } from './env';
 
-export const awsConfig = {
+if (!config.aws.userPoolId || !config.aws.userPoolClientId || !config.aws.region) {
+  console.error('AWS Configuration:', config.aws);
+  throw new Error('Missing required AWS configuration');
+}
+
+// Configure Amplify
+const amplifyConfig = {
   Auth: {
     Cognito: {
-      userPoolId,
-      userPoolClientId,
-    }
+      userPoolId: config.aws.userPoolId,
+      userPoolClientId: config.aws.userPoolClientId,
+    },
+    region: config.aws.region
   }
 };
+
+console.log('Configuring Amplify with:', amplifyConfig);
+Amplify.configure(amplifyConfig);
 
 // These endpoints are for your backend API
 export const apiEndpoints = {
   videos: {
-    upload: `${apiUrl}/v1/videos`,
-    process: (videoId: string) => `${apiUrl}/v1/videos/${videoId}/process`,
-    status: (videoId: string) => `${apiUrl}/v1/videos/${videoId}/status`,
+    upload: `${config.api.baseUrl}/v1/videos`,
+    process: (videoId: string) => `${config.api.baseUrl}/v1/videos/${videoId}/process`,
+    status: (videoId: string) => `${config.api.baseUrl}/v1/videos/${videoId}/status`,
   },
 }; 

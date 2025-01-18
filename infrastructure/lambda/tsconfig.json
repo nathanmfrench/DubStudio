@@ -2,7 +2,8 @@
   "compilerOptions": {
     "target": "ES2018",
     "module": "commonjs",
-    "lib": ["es2018", "dom"],
+    "lib": ["es2018"],
+    "declaration": true,
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -17,21 +18,16 @@
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
     "typeRoots": ["./node_modules/@types"],
-    "outDir": "dist",
-    "rootDir": ".",
+    "types": ["node"],
     "esModuleInterop": true,
-    "baseUrl": ".",
-    "paths": {
-      "../types/*": ["types/*"]
-    }
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "baseUrl": "./src",
+    "outDir": "./dist",
+    "rootDir": "./src"
   },
-  "include": [
-    "videos/**/*.ts",
-    "types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "**/*.test.ts"
-  ]
+  "exclude": ["node_modules", "cdk.out", "dist"],
+  "include": ["src/**/*"]
 }

@@ -18,55 +18,37 @@ export interface Config {
   };
 }
 
-// Default configuration values
-const defaultConfig: Config = {
-  environment: 'development',
-  api: {
-    baseUrl: 'https://ve5pvzxy2d.execute-api.us-east-1.amazonaws.com/prod',
-    timeout: 10000,
-    retries: 3,
-  },
-  aws: {
-    region: 'us-east-1',
-    userPoolId: 'us-east-1_H8AcY3ZlK',
-    userPoolClientId: '6hqhp7husqc641npi0dihj8a8b',
-  },
-};
-
-// Development configuration
-const developmentConfig: Partial<Config> = {
-  environment: 'development',
-  api: {
-    baseUrl: Constants.expoConfig?.extra?.apiUrl || 'https://ve5pvzxy2d.execute-api.us-east-1.amazonaws.com/prod',
-    timeout: 10000,
-    retries: 3,
-  },
-};
-
-// Production configuration
-const productionConfig: Partial<Config> = {
-  environment: 'production',
-  api: {
-    baseUrl: Constants.expoConfig?.extra?.apiUrl || process.env.EXPO_PUBLIC_API_URL || 'https://ve5pvzxy2d.execute-api.us-east-1.amazonaws.com/prod',
-    timeout: 15000,
-    retries: 2,
-  },
-};
+// Debug Expo config
+console.log('Raw Expo config:', {
+  extra: Constants.expoConfig?.extra,
+  manifest: Constants.manifest
+});
 
 // Get the current environment
 const getEnvironment = (): Environment => {
-  return (Constants.expoConfig?.extra?.environment as Environment) || 'development';
+  const env = Constants.expoConfig?.extra?.EXPO_PUBLIC_ENVIRONMENT as Environment;
+  console.log('Current environment:', env);
+  return env || 'development';
 };
 
-// Merge configurations based on environment
+// Get configuration from environment variables
 const getConfig = (): Config => {
-  const environment = getEnvironment();
-  const environmentConfig = environment === 'production' ? productionConfig : developmentConfig;
-  
-  return {
-    ...defaultConfig,
-    ...environmentConfig,
+  const config = {
+    environment: getEnvironment(),
+    api: {
+      baseUrl: Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || '',
+      timeout: Number(Constants.expoConfig?.extra?.EXPO_PUBLIC_API_TIMEOUT) || 10000,
+      retries: Number(Constants.expoConfig?.extra?.EXPO_PUBLIC_API_RETRIES) || 3,
+    },
+    aws: {
+      region: Constants.expoConfig?.extra?.EXPO_PUBLIC_AWS_REGION || 'us-east-1',
+      userPoolId: Constants.expoConfig?.extra?.EXPO_PUBLIC_AWS_USER_POOL_ID || '',
+      userPoolClientId: Constants.expoConfig?.extra?.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID || '',
+    },
   };
+  
+  console.log('Generated config:', config);
+  return config;
 };
 
 export const config = getConfig(); 

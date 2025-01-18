@@ -1,16 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Amplify } from 'aws-amplify';
 import { signIn, signUp, signOut, getCurrentUser, confirmSignUp, resetPassword, confirmResetPassword, resendSignUpCode } from 'aws-amplify/auth';
 import type { SignUpInput } from 'aws-amplify/auth';
-import { awsConfig } from '../config/aws-config';
-
-try {
-  console.log('Configuring Amplify with:', JSON.stringify(awsConfig, null, 2));
-  Amplify.configure(awsConfig);
-  console.log('Amplify configured successfully');
-} catch (error) {
-  console.error('Error configuring Amplify:', error);
-}
 
 interface AuthContextType {
   isAuthenticated: boolean;

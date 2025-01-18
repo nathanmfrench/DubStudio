@@ -1,9 +1,11 @@
 import { Handler } from 'aws-lambda';
-import { DynamoDB } from 'aws-sdk';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { success, error, AuthenticatedEvent } from '../types/api';
 
-const dynamodb = new DynamoDB.DocumentClient();
-const TABLE_NAME = process.env.VIDEOS_TABLE_NAME || '';
+const dynamodbClient = new DynamoDBClient({});
+const dynamodb = DynamoDBDocumentClient.from(dynamodbClient);
+const VIDEOS_TABLE_NAME = process.env.VIDEOS_TABLE_NAME || '';
 
 export const handler: Handler<AuthenticatedEvent> = async (event) => {
   try {
@@ -19,28 +21,21 @@ export const handler: Handler<AuthenticatedEvent> = async (event) => {
     }
 
     // Get video status from DynamoDB
-    const result = await dynamodb.get({
-      TableName: TABLE_NAME,
+    const result = await dynamodb.send(new GetCommand({
+      TableName: VIDEOS_TABLE_NAME,
       Key: {
         userId,
-        videoId,
-      },
-    }).promise();
+        videoId
+      }
+    }));
 
     if (!result.Item) {
       return error(404, 'Video not found');
     }
 
-    return success({
-      videoId,
-      status: result.Item.status,
-      progress: result.Item.progress || 0,
-      error: result.Item.error,
-      updatedAt: result.Item.updatedAt,
-      outputs: result.Item.outputs || [],
-    });
+    return success(result.Item);
   } catch (err) {
-    console.error('Error checking video status:', err);
-    return error(500, 'Error retrieving video status');
+    console.error('Error getting video status:', err);
+    return error(500, 'Error getting video status');
   }
 }; 
