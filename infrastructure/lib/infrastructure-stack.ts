@@ -211,15 +211,20 @@ export class InfrastructureStack extends cdk.Stack {
           'Authorization',
           'X-Api-Key',
           'X-Amz-Security-Token',
+          'Access-Control-Allow-Origin',
+          'Access-Control-Allow-Headers',
+          'Access-Control-Allow-Methods',
         ],
-        allowCredentials: true
+        allowCredentials: true,
+        maxAge: cdk.Duration.days(1)
       },
     });
 
     // Create Cognito Authorizer
     const authorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'DubStudioAuthorizer', {
       cognitoUserPools: [userPool],
-      identitySource: 'method.request.header.Authorization'
+      identitySource: 'method.request.header.Authorization',
+      resultsCacheTtl: cdk.Duration.minutes(5)
     });
 
     // Create API resources
@@ -368,16 +373,31 @@ export class InfrastructureStack extends cdk.Stack {
     videos.addMethod('POST', new apigateway.LambdaIntegration(uploadHandler), {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
+      authorizationScopes: [
+        'openid',
+        'email',
+        'profile'
+      ]
     });
 
     videoProcess.addMethod('POST', new apigateway.LambdaIntegration(processHandler), {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
+      authorizationScopes: [
+        'openid',
+        'email',
+        'profile'
+      ]
     });
 
     videoStatus.addMethod('GET', new apigateway.LambdaIntegration(statusHandler), {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
+      authorizationScopes: [
+        'openid',
+        'email',
+        'profile'
+      ]
     });
 
     // Add methods for other endpoints

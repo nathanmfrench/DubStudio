@@ -8,13 +8,15 @@ import { ListItem } from '../components/ListItem';
 import { Modal } from '../components/Modal';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
-import { getCurrentUser, fetchAuthSession } from 'aws-amplify/auth';
+import { fetchAuthSession, getCurrentUser } from 'aws-amplify/auth';
 import { apiEndpoints } from '../config/aws-config';
+import { config } from '../config/env';
 
 interface VideoSelection {
   uri: string;
-  duration: number;
   type: string;
+  name: string;
+  duration: number;
   size: number;
 }
 
@@ -150,6 +152,8 @@ export function UploadScreen() {
   ]);
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const handleBack = () => {
     if (step === 'details') {
@@ -187,6 +191,7 @@ export function UploadScreen() {
         }
 
         setSelectedVideo({
+          name: asset.fileName || 'Untitled',
           uri: asset.uri,
           duration: durationInSeconds,
           type: 'video',
@@ -381,49 +386,73 @@ export function UploadScreen() {
   };
 
   const handleUpload = async () => {
-    if (!selectedVideo || !captionDetails.targetLanguages.length) {
-      Alert.alert('Error', 'Please select a video and at least one target language');
-      return;
-    }
-
-    const validationError = validateVideo(selectedVideo);
-    if (validationError) {
-      Alert.alert('Error', validationError);
+    if (!selectedVideo) {
+      setError('No video selected');
       return;
     }
 
     try {
+      setError(null);
       setIsUploading(true);
       
-      // Get the current authenticated user and session
-      const user = await getCurrentUser();
+      // Get the current auth session
       const session = await fetchAuthSession();
-      const token = session.tokens?.accessToken?.toString();
-      
+      console.log('Auth session:', {
+        accessToken: session.tokens?.accessToken ? 'present' : 'missing',
+        idToken: session.tokens?.idToken ? 'present' : 'missing',
+        hasTokens: !!session.tokens?.accessToken && !!session.tokens?.idToken,
+        tokenDetails: session.tokens?.idToken ? {
+          payload: session.tokens.idToken.payload,
+          tokenString: session.tokens.idToken.toString()
+        } : null
+      });
+
+      // Make the request to get an upload URL
+      const token = session.tokens?.idToken?.toString();
       if (!token) {
         throw new Error('No authentication token available');
       }
-      
-      // Make the API request to get the upload URL
+
+      console.log('Making upload URL request to:', apiEndpoints.videos.upload);
+      console.log('Authorization header:', `Bearer ${token}`);
+
       const response = await fetch(apiEndpoints.videos.upload, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          videoId: captionDetails.id,
-          targetLanguages: captionDetails.targetLanguages,
-          caption: captionDetails.caption,
-        }),
+          fileName: selectedVideo.name,
+          fileType: selectedVideo.type
+        })
       });
 
+      console.log('Upload URL response status:', response.status);
+      const responseText = await response.text();
+      console.log('Upload URL response body:', responseText);
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to get upload URL');
+        try {
+          const errorData = JSON.parse(responseText);
+          throw new Error(errorData.error || `Failed to get upload URL: ${response.status} ${response.statusText}`);
+        } catch (e) {
+          throw new Error(`Failed to get upload URL: ${response.status} ${response.statusText} - ${responseText}`);
+        }
       }
 
-      const { videoId, uploadUrl } = await response.json();
+      let uploadData;
+      try {
+        uploadData = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error('Invalid JSON response from upload URL endpoint');
+      }
+
+      if (!uploadData.videoId || !uploadData.uploadUrl) {
+        throw new Error('Missing required fields in upload URL response');
+      }
+
+      console.log('Received upload URL for video ID:', uploadData.videoId);
 
       // Get the video blob and content type
       const videoResponse = await fetch(selectedVideo.uri);
@@ -434,7 +463,7 @@ export function UploadScreen() {
       const contentType = videoResponse.headers.get('content-type') || 'video/mp4';
 
       // Upload video to S3
-      const uploadResponse = await fetch(uploadUrl, {
+      const uploadResponse = await fetch(uploadData.uploadUrl, {
         method: 'PUT',
         body: videoBlob,
         headers: {
@@ -447,7 +476,7 @@ export function UploadScreen() {
       }
 
       // Start processing
-      const processResponse = await fetch(apiEndpoints.videos.process(videoId), {
+      const processResponse = await fetch(apiEndpoints.videos.process(uploadData.videoId), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
