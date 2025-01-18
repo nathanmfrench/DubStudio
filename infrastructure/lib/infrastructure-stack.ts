@@ -193,9 +193,11 @@ export class InfrastructureStack extends cdk.Stack {
       command: [
         'bash', '-c',
         [
-          'cp -r /asset-input/src/* /asset-output/',
+          'cp -r /asset-input/dist/* /asset-output/',
           'cp -r /asset-input/node_modules /asset-output/',
-          'cp /asset-input/package.json /asset-output/'
+          'cp /asset-input/package.json /asset-output/',
+          'cd /asset-output',
+          'npm install --production'
         ].join(' && ')
       ],
       workingDirectory: '/asset-input',
@@ -209,8 +211,8 @@ export class InfrastructureStack extends cdk.Stack {
         bundling: commonBundlingConfig
       }),
       environment: {
-        BUCKET_NAME: bucket.bucketName,
-        TABLE_NAME: videosTable.tableName
+        TABLE_NAME: videosTable.tableName,
+        BUCKET_NAME: bucket.bucketName
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 256
@@ -236,7 +238,7 @@ export class InfrastructureStack extends cdk.Stack {
         bundling: commonBundlingConfig
       }),
       environment: {
-        TABLE_NAME: videosTable.tableName
+        VIDEOS_TABLE_NAME: videosTable.tableName
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 256
@@ -312,7 +314,7 @@ export class InfrastructureStack extends cdk.Stack {
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'Authorization']
+        allowHeaders: ['Content-Type', 'Authorization', 'X-Amz-Date', 'X-Api-Key', 'X-Amz-Security-Token']
       },
       deployOptions: {
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
@@ -332,14 +334,24 @@ export class InfrastructureStack extends cdk.Stack {
     const defaultMethodOptions: apigateway.MethodOptions = {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
-      authorizationScopes: ['aws.cognito.signin.user.admin']
+      authorizationScopes: ['aws.cognito.signin.user.admin'],
+      methodResponses: [{
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': true,
+          'method.response.header.Access-Control-Allow-Headers': true,
+          'method.response.header.Access-Control-Allow-Methods': true,
+          'method.response.header.Access-Control-Allow-Credentials': true
+        }
+      }]
     };
 
     // Create API resources
     const v1 = api.root.addResource('v1');
     const videos = v1.addResource('videos');
-    const videoProcess = v1.addResource('process');
-    const videoStatus = v1.addResource('status');
+    const videoId = videos.addResource('{videoId}');
+    const videoStatus = videoId.addResource('status');
+    const videoProcess = videoId.addResource('process');
 
     // Video endpoints (with authorizer)
     videos.addMethod('POST', 
@@ -349,19 +361,14 @@ export class InfrastructureStack extends cdk.Stack {
         integrationResponses: [{
           statusCode: '200',
           responseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': "'*'"
+            'method.response.header.Access-Control-Allow-Origin': "'*'",
+            'method.response.header.Access-Control-Allow-Headers': "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
+            'method.response.header.Access-Control-Allow-Methods': "'OPTIONS,POST'",
+            'method.response.header.Access-Control-Allow-Credentials': "'true'"
           }
         }]
       }), 
-      {
-        ...defaultMethodOptions,
-        methodResponses: [{
-          statusCode: '200',
-          responseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': true
-          }
-        }]
-      }
+      defaultMethodOptions
     );
 
     videoProcess.addMethod('POST', 
@@ -371,19 +378,14 @@ export class InfrastructureStack extends cdk.Stack {
         integrationResponses: [{
           statusCode: '200',
           responseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': "'*'"
+            'method.response.header.Access-Control-Allow-Origin': "'*'",
+            'method.response.header.Access-Control-Allow-Headers': "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
+            'method.response.header.Access-Control-Allow-Methods': "'OPTIONS,POST'",
+            'method.response.header.Access-Control-Allow-Credentials': "'true'"
           }
         }]
       }), 
-      {
-        ...defaultMethodOptions,
-        methodResponses: [{
-          statusCode: '200',
-          responseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': true
-          }
-        }]
-      }
+      defaultMethodOptions
     );
 
     videoStatus.addMethod('GET', 
@@ -393,19 +395,14 @@ export class InfrastructureStack extends cdk.Stack {
         integrationResponses: [{
           statusCode: '200',
           responseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': "'*'"
+            'method.response.header.Access-Control-Allow-Origin': "'*'",
+            'method.response.header.Access-Control-Allow-Headers': "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
+            'method.response.header.Access-Control-Allow-Methods': "'OPTIONS,GET'",
+            'method.response.header.Access-Control-Allow-Credentials': "'true'"
           }
         }]
       }), 
-      {
-        ...defaultMethodOptions,
-        methodResponses: [{
-          statusCode: '200',
-          responseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': true
-          }
-        }]
-      }
+      defaultMethodOptions
     );
 
     // Public endpoints (no authorizer)

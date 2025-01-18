@@ -3,11 +3,10 @@
   "version": "1.0.0",
   "description": "Lambda functions for video processing",
   "scripts": {
-    "build": "./node_modules/.bin/tsc",
-    "watch": "./node_modules/.bin/tsc -w",
-    "clean": "rm -rf dist",
-    "prebuild": "npm run clean",
-    "postbuild": "cp package.json dist/"
+    "clean": "rm -rf dist && rm -rf src/**/*.js src/**/*.js.map src/**/*.d.ts",
+    "build": "npm run clean && tsc",
+    "prebuild": "npm install",
+    "predeploy": "npm run build"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",
@@ -22,7 +21,7 @@
     "@types/aws-lambda": "^8.10.92",
     "@types/http-errors": "^2.0.0",
     "@types/node": "^18.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0"
