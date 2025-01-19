@@ -5,6 +5,7 @@ import boto3
 from typing import Optional
 
 from elevenlabs.client import ElevenLabs
+
 # do we need to import the dubbing stuff here?
 
 
@@ -13,30 +14,30 @@ dynamodb = boto3.resource('dynamodb').Table(os.environ['VIDEOS_TABLE_NAME'])
 client = ElevenLabs(api_key=os.environ['ELEVENLABS_API_KEY'])
 
 def wait_for_dubbing_completion(dubbing_id: str, user_id: str, video_id: str) -> bool:
-    """Wait for the dubbing process to complete while updating status."""
+    """Wait for the dubbing process to complete."""
     while True:
-        status = client.dubbing.get_dubbing_status(dubbing_id)
-        progress = status.progress or 0
+        # Get metadata response (DubbingMetadataResponse object)
+        metadata = client.dubbing.get_dubbing_project_metadata(dubbing_id)
+        print(f"Dubbing metadata response: {metadata}")  # Debug print
         
-        # Update DynamoDB with current progress
+        # Update DynamoDB to show we're processing
         dynamodb.update_item(
             Key={'userId': user_id, 'videoId': video_id},
-            UpdateExpression='SET #status = :status, #progress = :progress, #updatedAt = :updatedAt',
+            UpdateExpression='SET #status = :status, #updatedAt = :updatedAt',
             ExpressionAttributeNames={
                 '#status': 'status',
-                '#progress': 'progress',
                 '#updatedAt': 'updatedAt'
             },
             ExpressionAttributeValues={
                 ':status': 'PROCESSING',
-                ':progress': progress,
                 ':updatedAt': time.strftime('%Y-%m-%dT%H:%M:%S.000Z')
             }
         )
         
-        if status.status == 'done':
+        # Check the status field from DubbingMetadataResponse
+        if metadata.status == 'dubbed':  # Explicitly check for 'dubbed' status
             return True
-        elif status.status == 'failed':
+        elif metadata.error is not None:
             return False
             
         time.sleep(5)  # Wait 5 seconds before checking again
@@ -45,22 +46,43 @@ def download_dubbed_file(dubbing_id: str, target_language: str) -> str:
     """Download the dubbed file from ElevenLabs."""
     output_path = f'/tmp/output-{dubbing_id}.mp4'
     with open(output_path, 'wb') as f:
-        dubbed_video = client.dubbing.get_dubbed_video(dubbing_id)
-        for chunk in dubbed_video:
+        dubbed_file = client.dubbing.get_dubbed_file(dubbing_id, language_code=target_language)
+        for chunk in dubbed_file:
             f.write(chunk)
     return output_path
 
 def handler(event, context):
     try:
         # Parse input
+        print(f"Raw event received: {json.dumps(event)}")  # Log entire event
         user_id = event['userId']
         video_id = event['videoId']
-        body = event['body']
-        source_language = body.get('sourceLanguage', 'en')  # Default to English
-        target_language = body.get('targetLanguage')
+        print(f"Extracted user_id: {user_id}, video_id: {video_id}")
         
-        if not target_language:
-            raise ValueError("Missing targetLanguage parameter")
+        body = json.loads(event['body']) if isinstance(event['body'], str) else event['body']
+        print(f"Parsed body: {json.dumps(body)}")  # Log parsed body
+        
+        source_language = body.get('sourceLanguage', 'en')
+        # Handle both singular and plural parameter names
+        target_language = body.get('targetLanguage')
+        target_languages = body.get('targetLanguages', [])
+        
+        # If singular parameter is provided, convert to list format
+        if target_language:
+            target_languages = [target_language]
+            
+        print(f"Extracted languages - source: {source_language}, target: {target_languages}")
+        
+        if not target_languages:
+            print("No target languages found in request body")
+            raise ValueError("Missing targetLanguages parameter")
+            
+        # Validate language codes
+        supported_languages = {'en', 'hi', 'pt', 'zh', 'es', 'fr', 'de', 'ja', 'ar', 'ru', 'ko', 'id', 'it', 'nl', 'tr', 'pl', 'sv', 'fil', 'ms', 'ro', 'uk', 'el', 'cs', 'da', 'fi', 'bg', 'hr', 'sk', 'ta'}
+        if target_language not in supported_languages:
+            raise ValueError(f"Unsupported target language: {target_language}")
+        if source_language not in supported_languages:
+            raise ValueError(f"Unsupported source language: {source_language}")
             
         # Get video details from DynamoDB
         video_record = dynamodb.get_item(
@@ -83,7 +105,6 @@ def handler(event, context):
             response = client.dubbing.dub_a_video_or_an_audio_file(
                 file=(f'{video_id}.mp4', video_file, 'video/mp4'),
                 target_lang=target_language,
-                mode='automatic',
                 source_lang=source_language,
                 num_speakers=1,
                 watermark=True
@@ -139,29 +160,32 @@ def handler(event, context):
         return {
             'statusCode': 200,
             'body': json.dumps({
-                'message': 'Video dubbing completed successfully',
+                'message': 'Video dubbing completed',
                 'videoId': video_id,
+                'status': 'COMPLETED',
                 'targetLanguage': target_language
             })
         }
-        
     except Exception as e:
-        print(f"Error processing video: {str(e)}")
+        print(f"Error: {str(e)}")
         # Update DynamoDB with failed status
-        if 'user_id' in locals() and 'video_id' in locals():
-            dynamodb.update_item(
-                Key={'userId': user_id, 'videoId': video_id},
-                UpdateExpression='SET #status = :status, #updatedAt = :updatedAt',
-                ExpressionAttributeNames={
-                    '#status': 'status',
-                    '#updatedAt': 'updatedAt'
-                },
-                ExpressionAttributeValues={
-                    ':status': 'FAILED',
-                    ':updatedAt': time.strftime('%Y-%m-%dT%H:%M:%S.000Z')
-                }
-            )
+        dynamodb.update_item(
+            Key={'userId': user_id, 'videoId': video_id},
+            UpdateExpression='SET #status = :status, #updatedAt = :updatedAt, #error = :error',
+            ExpressionAttributeNames={
+                '#status': 'status',
+                '#updatedAt': 'updatedAt',
+                '#error': 'error'
+            },
+            ExpressionAttributeValues={
+                ':status': 'FAILED',
+                ':updatedAt': time.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+                ':error': str(e)
+            }
+        )
         return {
             'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({
+                'error': str(e)
+            })
         } 

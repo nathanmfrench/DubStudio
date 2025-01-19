@@ -1,7 +1,11 @@
 todo:
+
 right now defaults to english to x language, but mabe in future start rolling out other languages.
 dub an existing video (thing in elevenlabs api where you can dub from source url)
 add number of speakers in the video so the user can select how many speakers there are
+remove watermark
+drop background audio
+highest resolution
 time zone optimization for each rwgion, post scheduling
 maybe make it so that you have to pay extra for the dashboards (these can be pricey with many users)
 fix dashboards to look better
