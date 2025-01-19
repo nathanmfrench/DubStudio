@@ -66,10 +66,11 @@ export const handler: Handler<AuthenticatedEvent> = async (event) => {
         userId,
         videoId
       },
-      UpdateExpression: 'SET #status = :status, #updatedAt = :updatedAt',
+      UpdateExpression: 'SET #status = :status, #updatedAt = :updatedAt REMOVE #error',
       ExpressionAttributeNames: {
         '#status': 'status',
-        '#updatedAt': 'updatedAt'
+        '#updatedAt': 'updatedAt',
+        '#error': 'error'
       },
       ExpressionAttributeValues: {
         ':status': 'PROCESSING',

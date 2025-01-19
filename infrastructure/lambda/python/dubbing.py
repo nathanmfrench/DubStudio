@@ -3,6 +3,7 @@ import json
 import time
 import boto3
 from typing import Optional
+from datetime import datetime
 
 from elevenlabs.client import ElevenLabs
 
@@ -143,17 +144,22 @@ def handler(event, context):
             f'{user_id}/{video_id}/dubbed_{target_language}.mp4'
         )
         
-        # Update DynamoDB with completed status
+        # Update DynamoDB with success status
         dynamodb.update_item(
-            Key={'userId': user_id, 'videoId': video_id},
-            UpdateExpression='SET #status = :status, #updatedAt = :updatedAt',
+            TableName=os.environ['VIDEOS_TABLE_NAME'],
+            Key={
+                'userId': user_id,
+                'videoId': video_id
+            },
+            UpdateExpression='SET #status = :status, #updatedAt = :updatedAt REMOVE #error',
             ExpressionAttributeNames={
                 '#status': 'status',
-                '#updatedAt': 'updatedAt'
+                '#updatedAt': 'updatedAt',
+                '#error': 'error'
             },
             ExpressionAttributeValues={
                 ':status': 'COMPLETED',
-                ':updatedAt': time.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+                ':updatedAt': datetime.now().isoformat()
             }
         )
         
