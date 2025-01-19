@@ -218,19 +218,6 @@ export class InfrastructureStack extends cdk.Stack {
       memorySize: 256
     });
 
-    const processHandler = new lambda.Function(this, 'ProcessHandler', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'videos/process.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {
-        bundling: commonBundlingConfig
-      }),
-      environment: {
-        TABLE_NAME: videosTable.tableName
-      },
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 256
-    });
-
     const statusHandler = new lambda.Function(this, 'StatusHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'videos/status.handler',
@@ -243,6 +230,50 @@ export class InfrastructureStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(30),
       memorySize: 256
     });
+
+    // Create the dubbing handler
+    const dubbingHandler = new lambda.Function(this, 'DubbingHandler', {
+      runtime: lambda.Runtime.PYTHON_3_9,
+      handler: 'dubbing.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/python'), {
+        bundling: {
+          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
+          command: [
+            'bash', '-c', [
+              'pip install -r requirements.txt -t /asset-output',
+              'cp -au . /asset-output'
+            ].join(' && ')
+          ]
+        }
+      }),
+      environment: {
+        VIDEOS_TABLE_NAME: videosTable.tableName,
+        BUCKET_NAME: bucket.bucketName,
+        ELEVENLABS_API_KEY: elevenLabsApiKey.valueAsString
+      },
+      timeout: cdk.Duration.minutes(15),
+      memorySize: 1024
+    });
+
+    // Grant permissions to dubbing handler
+    bucket.grantReadWrite(dubbingHandler);
+    videosTable.grantReadWriteData(dubbingHandler);
+
+    const processHandler = new lambda.Function(this, 'ProcessHandler', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'videos/process.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {
+        bundling: commonBundlingConfig
+      }),
+      environment: {
+        VIDEOS_TABLE_NAME: videosTable.tableName,
+        BUCKET_NAME: bucket.bucketName,
+        DUBBING_FUNCTION_NAME: dubbingHandler.functionName
+      },
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256
+    });
+
     // Create IAM role for API Gateway execution
     const apiGatewayRole = new iam.Role(this, 'ApiGatewayExecutionRole', {
       assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
@@ -265,6 +296,16 @@ export class InfrastructureStack extends cdk.Stack {
     videosTable.grantReadWriteData(uploadHandler);
     videosTable.grantReadWriteData(processHandler);
     videosTable.grantReadWriteData(statusHandler);
+
+    // Add permission for process handler to invoke dubbing handler
+    dubbingHandler.grantInvoke(processHandler);
+
+    // Add Lambda invoke permissions to process handler
+    processHandler.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['lambda:InvokeFunction'],
+      resources: [dubbingHandler.functionArn]
+    }));
 
     // Add CloudWatch Logs permissions
     uploadHandler.addToRolePolicy(new iam.PolicyStatement({

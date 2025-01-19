@@ -1,7 +1,7 @@
 import { Handler } from 'aws-lambda';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { success, error, AuthenticatedEvent } from '../types/api';
 
 const lambdaClient = new LambdaClient({});
@@ -58,6 +58,24 @@ export const handler: Handler<AuthenticatedEvent> = async (event) => {
       });
       return lambdaClient.send(command);
     });
+
+    // Update video status to PROCESSING
+    await dynamodb.send(new UpdateCommand({
+      TableName: VIDEOS_TABLE_NAME,
+      Key: {
+        userId,
+        videoId
+      },
+      UpdateExpression: 'SET #status = :status, #updatedAt = :updatedAt',
+      ExpressionAttributeNames: {
+        '#status': 'status',
+        '#updatedAt': 'updatedAt'
+      },
+      ExpressionAttributeValues: {
+        ':status': 'PROCESSING',
+        ':updatedAt': new Date().toISOString()
+      }
+    }));
 
     // Wait for all dubbing jobs to start
     await Promise.all(dubbingPromises);
