@@ -3,7 +3,10 @@ import json
 import time
 import boto3
 from typing import Optional
+
 from elevenlabs.client import ElevenLabs
+# do we need to import the dubbing stuff here?
+
 
 s3 = boto3.client('s3')
 dynamodb = boto3.resource('dynamodb').Table(os.environ['VIDEOS_TABLE_NAME'])
@@ -83,7 +86,7 @@ def handler(event, context):
                 mode='automatic',
                 source_lang=source_language,
                 num_speakers=1,
-                watermark=False
+                watermark=True
             )
             dubbing_id = response.dubbing_id
         
