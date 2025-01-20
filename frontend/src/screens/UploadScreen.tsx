@@ -48,6 +48,19 @@ interface UploadResponse {
   uploadUrl: string;
 }
 
+interface ProcessingStatus {
+  status: 'pending_upload' | 'uploading' | 'processing' | 'completed' | 'failed';
+  progress: number;
+  error?: string;
+  languages: {
+    [key: string]: {
+      status: 'pending' | 'processing' | 'completed' | 'failed';
+      progress: number;
+      error?: string;
+    };
+  };
+}
+
 const AVAILABLE_LANGUAGES = [
   { code: 'hi', name: 'Hindi' },
   { code: 'pt', name: 'Portuguese' },
@@ -138,6 +151,46 @@ const CurvedPath = () => (
   </Svg>
 );
 
+const SUPPORTED_VIDEO_FORMATS = ['mp4', 'mov', 'hevc'];
+
+const validateVideoFormat = async (uri: string): Promise<boolean> => {
+  try {
+    // First check file extension
+    const extension = uri.split('.').pop()?.toLowerCase();
+    if (!extension || !['mp4', 'mov', 'm4v'].includes(extension)) {
+      return false;
+    }
+
+    // Then check the video codec using the blob
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    
+    // H.264/AVC MIME types
+    const h264Types = [
+      'video/mp4',
+      'video/mp4; codecs=avc1',
+      'video/mp4; codecs=avc1.42E01E',
+      'video/mp4; codecs=avc1.42E01E,mp4a.40.2',
+      'video/x-m4v',
+      'video/quicktime'
+    ];
+
+    // HEVC/H.265 MIME types
+    const hevcTypes = [
+      'video/mp4; codecs=hevc',
+      'video/mp4; codecs=hevc,mp4a.40.2',
+      'video/hevc'
+    ];
+
+    const videoType = blob.type;
+    console.log('Video MIME type:', videoType); // Debug log
+    return h264Types.includes(videoType) || hevcTypes.includes(videoType);
+  } catch (error) {
+    console.error('Error validating video format:', error);
+    return false;
+  }
+};
+
 export function UploadScreen() {
   const [selectedVideo, setSelectedVideo] = useState<VideoSelection | null>(null);
   const [step, setStep] = useState<'select' | 'details'>('select');
@@ -154,6 +207,9 @@ export function UploadScreen() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [processingStatus, setProcessingStatus] = useState<ProcessingStatus | null>(null);
+  const [statusModalVisible, setStatusModalVisible] = useState(false);
+  const [startTime] = useState(Date.now());
 
   const handleBack = () => {
     if (step === 'details') {
@@ -190,11 +246,26 @@ export function UploadScreen() {
           return;
         }
 
+        const isValidFormat = await validateVideoFormat(asset.uri);
+        if (!isValidFormat) {
+          Alert.alert(
+            "Unsupported Format",
+            "Please select a video in MP4 format (H.264 or HEVC codec).",
+            [{ text: "OK" }]
+          );
+          return;
+        }
+
+        // Get the actual MIME type from the blob
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        const mimeType = blob.type || 'video/mp4';
+
         setSelectedVideo({
           name: asset.fileName || 'Untitled',
           uri: asset.uri,
           duration: durationInSeconds,
-          type: 'video',
+          type: mimeType,
           size: asset.fileSize || 0,
         });
       }
@@ -385,93 +456,262 @@ export function UploadScreen() {
     return null;
   };
 
+  const MAX_POLLING_DURATION = 15 * 60 * 1000; // 15 minutes
+
+  const pollVideoStatus = async (videoId: string) => {
+    try {
+      const session = await fetchAuthSession();
+      const token = session.tokens?.accessToken?.toString();
+      if (!token) throw new Error('No auth token');
+
+      const response = await fetch(apiEndpoints.videos.status(videoId), {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch status');
+      
+      const data = await response.json();
+      console.log('[Status] Received status update:', data);
+
+      setProcessingStatus(prevStatus => {
+        if (!prevStatus) return null;
+
+        // Map backend status to frontend status (handle both upper and lowercase)
+        const statusMap: Record<string, ProcessingStatus['status']> = {
+          'pending_upload': 'pending_upload',
+          'PENDING_UPLOAD': 'pending_upload',
+          'uploading': 'uploading',
+          'UPLOADING': 'uploading',
+          'processing': 'processing',
+          'PROCESSING': 'processing',
+          'completed': 'completed',
+          'COMPLETED': 'completed',
+          'failed': 'failed',
+          'FAILED': 'failed',
+          // Add legacy status mappings
+          'dubbing': 'processing',
+          'dubbed': 'completed'
+        };
+
+        // Convert backend status to lowercase for consistent comparison
+        const backendStatus = (data.status || '').toLowerCase();
+        const newStatus = statusMap[data.status] || statusMap[backendStatus] || prevStatus.status;
+        console.log('[Status] Mapping status:', { 
+          from: data.status, 
+          to: newStatus, 
+          current: prevStatus.status 
+        });
+
+        const progress = data.progress || prevStatus.progress;
+
+        // Update language statuses
+        const updatedLanguages = Object.fromEntries(
+          Object.entries(prevStatus.languages).map(([lang, status]) => {
+            const langStatus = data.languages?.[lang];
+            if (!langStatus) return [lang, status];
+
+            return [lang, {
+              status: langStatus.status || status.status,
+              progress: langStatus.progress || status.progress,
+              error: langStatus.error
+            }];
+          })
+        );
+
+        return {
+          ...prevStatus,
+          status: newStatus,
+          progress: progress,
+          error: data.error,
+          languages: updatedLanguages
+        };
+      });
+
+      // Continue polling if not in a final state (check both upper and lowercase)
+      const status = (data.status || '').toLowerCase();
+      if (!['completed', 'failed', 'dubbed'].includes(status)) {
+        setTimeout(() => pollVideoStatus(videoId), 5000);
+      } else if (status === 'completed' || status === 'dubbed') {
+        // Show completion for a moment before closing
+        setTimeout(() => {
+          setStatusModalVisible(false);
+          resetState();
+        }, 3000);
+      } else if (status === 'failed') {
+        // Show error state but allow manual dismissal
+        Alert.alert('Processing Failed', data.error || 'An error occurred during processing');
+      }
+    } catch (error) {
+      console.error('[Status] Error polling status:', error);
+      // Don't stop polling on temporary errors, unless we've been polling for too long
+      if (Date.now() - startTime < MAX_POLLING_DURATION) {
+        setTimeout(() => pollVideoStatus(videoId), 5000);
+      } else {
+        setProcessingStatus(prev => prev ? {
+          ...prev,
+          status: 'failed',
+          error: 'Polling timeout exceeded'
+        } : null);
+        Alert.alert('Processing Failed', 'Status check timed out. Please try again.');
+      }
+    }
+  };
+
   const handleUpload = async () => {
     if (!selectedVideo) {
       setError('No video selected');
       return;
     }
 
+    let currentVideoId: string | null = null;
+
     try {
       setError(null);
       setIsUploading(true);
-      console.log('Starting upload process...');
+      setStatusModalVisible(true);
+      setProcessingStatus({
+        status: 'pending_upload',
+        progress: 0,
+        languages: Object.fromEntries(
+          captionDetails.targetLanguages.map(lang => [
+            lang,
+            { status: 'pending', progress: 0 }
+          ])
+        )
+      });
+
+      console.log('[Upload] Starting upload process with video:', {
+        name: selectedVideo.name,
+        size: formatFileSize(selectedVideo.size),
+        type: selectedVideo.type,
+        duration: formatDuration(selectedVideo.duration)
+      });
       
       // Get current auth session
-      console.log('Fetching auth session...');
-      const session = await fetchAuthSession();
-      console.log('Auth session retrieved:', {
-        hasIdToken: !!session.tokens?.idToken,
-        hasAccessToken: !!session.tokens?.accessToken,
-        idTokenExpiration: session.tokens?.idToken?.payload?.exp ? new Date(session.tokens.idToken.payload.exp * 1000).toISOString() : 'No expiration',
-        accessTokenExpiration: session.tokens?.accessToken?.payload?.exp ? new Date(session.tokens.accessToken.payload.exp * 1000).toISOString() : 'No expiration'
+      console.log('[Upload] Fetching auth session...');
+      const session = await fetchAuthSession().catch(error => {
+        console.error('[Upload] Auth session error:', error);
+        throw new Error('Failed to authenticate. Please try logging in again.');
       });
 
       // Get access token
       const token = session.tokens?.accessToken?.toString();
       if (!token) {
-        console.error('No access token available in session');
-        throw new Error('Authentication required');
+        console.error('[Upload] No access token found in session');
+        throw new Error('Authentication required. Please log in again.');
       }
-      console.log('Token length:', token.length);
-      console.log('Token first 20 chars:', token.substring(0, 20));
-      console.log('Token last 20 chars:', token.substring(token.length - 20));
+      console.log('[Upload] Successfully obtained access token');
 
       // Prepare request for upload URL
       const apiUrl = `${apiEndpoints.videos.upload}`;
-      console.log('Making request to:', apiUrl);
-      console.log('Request headers:', {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token.substring(0, 10)}...${token.substring(token.length - 10)}`
-      });
-
-      // Make request for upload URL
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          fileName: selectedVideo.name,
-          fileType: selectedVideo.type
-        })
-      });
-
-      console.log('Upload URL response status:', response.status);
-      console.log('Upload URL response headers:', Object.fromEntries(response.headers.entries()));
+      console.log('[Upload] Making request to:', apiUrl);
       
-      const responseText = await response.text();
-      console.log('Upload URL response body:', responseText);
+      // Make request for upload URL with timeout
+      console.log('[Upload] Requesting presigned URL...');
+      const uploadUrlResponse = await Promise.race([
+        fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            fileName: selectedVideo.name,
+            fileType: selectedVideo.type,
+            fileSize: selectedVideo.size
+          })
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout. Please try again.')), 30000)
+        )
+      ]) as Response;
 
-      if (!response.ok) {
-        throw new Error(`Failed to get upload URL: ${response.status} - ${responseText}`);
+      if (!uploadUrlResponse.ok) {
+        const errorData = await uploadUrlResponse.text();
+        console.error('[Upload] Failed to get upload URL:', {
+          status: uploadUrlResponse.status,
+          statusText: uploadUrlResponse.statusText,
+          error: errorData
+        });
+        throw new Error(`Failed to get upload URL: ${uploadUrlResponse.status} - ${errorData}`);
       }
 
-      const data = JSON.parse(responseText) as UploadResponse;
-      console.log('Parsed response data:', data);
+      const data = await uploadUrlResponse.json() as UploadResponse;
+      currentVideoId = data.videoId;
+      console.log('[Upload] Received presigned URL response:', {
+        videoId: data.videoId,
+        hasUploadUrl: !!data.uploadUrl
+      });
 
-      // Get the video blob and content type
+      // Get the video blob
+      console.log('[Upload] Reading video file...');
       const videoResponse = await fetch(selectedVideo.uri);
       if (!videoResponse.ok) {
-        throw new Error('Failed to read video file');
+        console.error('[Upload] Failed to read video file:', videoResponse.statusText);
+        throw new Error('Failed to read video file. Please try again.');
       }
       const videoBlob = await videoResponse.blob();
-      const contentType = videoResponse.headers.get('content-type') || 'video/mp4';
+      
+      // Determine content type from the blob
+      const contentType = videoBlob.type || 'video/mp4';
 
-      // Upload video to S3
-      const uploadResponse = await fetch(data.uploadUrl, {
-        method: 'PUT',
-        body: videoBlob,
-        headers: {
-          'Content-Type': contentType,
+      // Upload video to S3 with progress tracking
+      console.log('[Upload] Starting S3 upload...');
+      const xhr = new XMLHttpRequest();
+      
+      // Single onprogress handler for upload
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const progress = (event.loaded / event.total) * 100;
+          console.log(`[Upload] Progress: ${progress.toFixed(1)}%`);
+          setUploadProgress(progress);
+          setProcessingStatus(prev => prev ? {
+            ...prev,
+            status: 'uploading',
+            progress
+          } : null);
         }
+      };
+
+      // Wait for S3 upload to complete
+      await new Promise((resolve, reject) => {
+        xhr.open('PUT', data.uploadUrl);
+        xhr.setRequestHeader('Content-Type', contentType);
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            console.log('[Upload] S3 upload completed successfully');
+            // Update status to show upload complete
+            setProcessingStatus(prev => prev ? {
+              ...prev,
+              status: 'processing',
+              progress: 100,
+              languages: Object.fromEntries(
+                Object.entries(prev.languages).map(([lang, status]) => [
+                  lang,
+                  { ...status, status: 'pending' }
+                ])
+              )
+            } : null);
+            resolve(null);
+          } else {
+            console.error('[Upload] S3 upload failed:', {
+              status: xhr.status,
+              response: xhr.responseText
+            });
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        };
+        xhr.onerror = () => {
+          console.error('[Upload] Network error during S3 upload');
+          reject(new Error('Network error during upload'));
+        };
+        xhr.send(videoBlob);
       });
 
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload video');
-      }
-
       // Start processing
+      console.log('[Upload] Starting video processing...');
       const processResponse = await fetch(apiEndpoints.videos.process(data.videoId), {
         method: 'POST',
         headers: {
@@ -479,7 +719,7 @@ export function UploadScreen() {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          sourceLanguage: 'en', // Default to English as source
+          sourceLanguage: 'en',
           targetLanguages: captionDetails.targetLanguages,
           caption: captionDetails.caption
         })
@@ -487,25 +727,38 @@ export function UploadScreen() {
 
       if (!processResponse.ok) {
         const errorData = await processResponse.json();
+        console.error('[Upload] Processing request failed:', errorData);
         throw new Error(errorData.error || 'Failed to start processing');
       }
 
-      Alert.alert(
-        'Success',
-        'Video uploaded successfully! Processing will begin shortly.',
-        [{ text: 'OK', onPress: resetState }]
-      );
+      console.log('[Upload] Video processing started successfully');
+      
+      // Start polling for status immediately after processing starts
+      // Add a small delay to allow backend to update status
+      setTimeout(() => pollVideoStatus(data.videoId), 2000);
 
     } catch (error) {
-      console.error('Upload error details:', {
+      console.error('[Upload] Error details:', {
         cause: error instanceof Error ? error.cause : undefined,
         message: error instanceof Error ? error.message : String(error),
         name: error instanceof Error ? error.name : 'UnknownError',
         stack: error instanceof Error ? error.stack : undefined
       });
-      Alert.alert('Error', error instanceof Error ? error.message : 'An unknown error occurred');
+      
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      Alert.alert('Upload Failed', errorMessage);
+      setError(errorMessage);
+      setProcessingStatus(prev => prev ? {
+        ...prev,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      } : null);
+      
+      // Reset state on error
+      resetState();
+    } finally {
       setIsUploading(false);
-      throw error;
+      setUploadProgress(0);
     }
   };
 
@@ -513,14 +766,6 @@ export function UploadScreen() {
     <View style={styles.content}>
       <View style={styles.detailsContainer}>
         <ScrollView style={styles.scrollContent}>
-          <View style={styles.videoPreview}>
-            <Image 
-              source={{ uri: selectedVideo?.uri }} 
-              style={styles.smallThumbnail}
-              resizeMode="cover"
-            />
-          </View>
-          
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Caption</Text>
             <TextInput
@@ -634,6 +879,100 @@ export function UploadScreen() {
     </View>
   );
 
+  const renderStatusModal = () => (
+    <Modal
+      visible={statusModalVisible}
+      onClose={() => {
+        if (processingStatus?.status !== 'processing') {
+          setStatusModalVisible(false);
+        }
+      }}
+      title="Processing Status"
+      size="small"
+    >
+      <View style={styles.statusContent}>
+        <View style={styles.statusHeader}>
+          <MaterialCommunityIcons
+            name={
+              processingStatus?.status === 'completed' ? 'check-circle' :
+              processingStatus?.status === 'failed' ? 'alert-circle' :
+              'progress-clock'
+            }
+            size={24}
+            color={
+              processingStatus?.status === 'completed' ? '#34D399' :
+              processingStatus?.status === 'failed' ? '#EF4444' :
+              '#2171C1'
+            }
+          />
+          <Text style={styles.statusTitle}>
+            {processingStatus?.status === 'pending_upload' ? 'Preparing Upload...' :
+             processingStatus?.status === 'uploading' ? 'Uploading Video...' :
+             processingStatus?.status === 'processing' ? 'Processing Video...' :
+             processingStatus?.status === 'completed' ? 'Processing Complete!' :
+             'Processing Failed'}
+          </Text>
+        </View>
+
+        {processingStatus?.status === 'uploading' && (
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBar}>
+              <View 
+                style={[
+                  styles.progressFill,
+                  { width: `${processingStatus.progress}%` }
+                ]}
+              />
+            </View>
+            <Text style={styles.progressText}>{Math.round(processingStatus.progress)}%</Text>
+          </View>
+        )}
+
+        {(processingStatus?.status === 'processing' || processingStatus?.status === 'completed') && (
+          <View style={styles.languageStatusList}>
+            {Object.entries(processingStatus.languages).map(([lang, status]) => (
+              <View key={lang} style={styles.languageStatusItem}>
+                <View style={styles.languageStatusHeader}>
+                  <Text style={styles.languageStatusText}>
+                    {AVAILABLE_LANGUAGES.find(l => l.code === lang)?.name}
+                  </Text>
+                  <MaterialCommunityIcons
+                    name={
+                      status.status === 'completed' ? 'check-circle' :
+                      status.status === 'failed' ? 'alert-circle' :
+                      status.status === 'processing' ? 'progress-clock' :
+                      'clock-outline'
+                    }
+                    size={18}
+                    color={
+                      status.status === 'completed' ? '#34D399' :
+                      status.status === 'failed' ? '#EF4444' :
+                      '#2171C1'
+                    }
+                  />
+                </View>
+                {status.status === 'processing' && (
+                  <View style={styles.progressBar}>
+                    <View 
+                      style={[
+                        styles.progressFill,
+                        { width: `${status.progress}%` }
+                      ]}
+                    />
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {processingStatus?.error && (
+          <Text style={styles.errorText}>{processingStatus.error}</Text>
+        )}
+      </View>
+    </Modal>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
@@ -650,6 +989,7 @@ export function UploadScreen() {
       <ScrollView style={styles.scrollContent}>
         {step === 'select' ? renderVideoSelection() : renderCaptionDetails()}
       </ScrollView>
+      {renderStatusModal()}
     </SafeAreaView>
   );
 }
@@ -783,18 +1123,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
     flex: 1, // Take up all available space
-  },
-  videoPreview: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  smallThumbnail: {
-    width: 80,
-    height: 45,
-    borderRadius: 8,
-    backgroundColor: '#F3F4F6',
-    marginHorizontal: 12,
   },
   inputContainer: {
     padding: 16,
@@ -963,5 +1291,59 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#FFFFFF',
     fontWeight: '500',
+  },
+  statusContent: {
+    padding: 16,
+  },
+  statusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  progressContainer: {
+    marginBottom: 16,
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginVertical: 8,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#2171C1',
+    borderRadius: 2,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'right',
+  },
+  languageStatusList: {
+    gap: 12,
+  },
+  languageStatusItem: {
+    gap: 4,
+  },
+  languageStatusHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  languageStatusText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#EF4444',
+    marginTop: 12,
   },
 }); 
