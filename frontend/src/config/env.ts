@@ -16,6 +16,10 @@ export interface Config {
     userPoolId: string;
     userPoolClientId: string;
   };
+  instagram: {
+    clientId: string;
+    redirectUri: string;
+  };
 }
 
 // Debug Expo config
@@ -45,6 +49,10 @@ const getConfig = (): Config => {
       userPoolId: Constants.expoConfig?.extra?.EXPO_PUBLIC_AWS_USER_POOL_ID || '',
       userPoolClientId: Constants.expoConfig?.extra?.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID || '',
     },
+    instagram: {
+      clientId: Constants.expoConfig?.extra?.EXPO_PUBLIC_INSTAGRAM_CLIENT_ID || '',
+      redirectUri: Constants.expoConfig?.extra?.EXPO_PUBLIC_INSTAGRAM_REDIRECT_URI || '',
+    }
   };
   
   console.log('Generated config:', config);

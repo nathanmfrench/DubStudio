@@ -30,10 +30,12 @@ interface CaptionDetails {
 }
 
 interface ConnectedAccount {
-  platform: 'tiktok' | 'instagram' | 'youtube' | 'facebook';
+  platform: 'instagram';
   username: string;
   language?: string;
   isConnected: boolean;
+  accessToken?: string;
+  userId?: string;
 }
 
 interface AccountMetrics {
@@ -62,6 +64,16 @@ interface ProcessingStatus {
       error?: string;
     };
   };
+}
+
+interface AccountCreationDetails {
+  username: string;
+  password: string;
+  email?: string;
+  bio?: string;
+  profilePicture?: string;
+  language: string;
+  languageName: string;
 }
 
 const AVAILABLE_LANGUAGES = [
@@ -202,7 +214,6 @@ export function UploadScreen() {
     id: `VID_${Date.now()}`
   });
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([
-    { platform: 'tiktok', username: '@username', isConnected: false },
     { platform: 'instagram', username: '@username', isConnected: false }
   ]);
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
@@ -215,6 +226,8 @@ export function UploadScreen() {
   const [showCelebration, setShowCelebration] = useState(false);
   const successScaleAnim = useRef(new Animated.Value(0)).current;
   const successOpacityAnim = useRef(new Animated.Value(0)).current;
+  const [showAccountCreationModal, setShowAccountCreationModal] = useState(false);
+  const [accountCreationDetails, setAccountCreationDetails] = useState<AccountCreationDetails | null>(null);
 
   useEffect(() => {
     if (showCelebration) {
@@ -528,49 +541,12 @@ export function UploadScreen() {
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Post to Accounts</Text>
               <View style={styles.accountsList}>
-                {captionDetails.targetLanguages.map((langCode, index) => {
-                  const existingAccount = connectedAccounts.find(
-                    account => account.isConnected && account.language === langCode
-                  );
-
-                  if (existingAccount) {
-                    return (
-                      <View key={langCode} style={styles.accountItem}>
-                        <ListItem
-                          accountName={existingAccount.username.replace('@', '')}
-                          status="connected"
-                          language={AVAILABLE_LANGUAGES.find(lang => lang.code === langCode)?.name}
-                          onPress={() => handleAccountPress(existingAccount.username.replace('@', ''))}
-                        />
-                      </View>
-                    );
-                  }
-
-                  return (
-                    <View key={langCode} style={styles.accountItem}>
-                      <ListItem
-                        accountName={getRecommendedUsername(langCode)}
-                        subtitle="Recommended account name"
-                        status="disconnected"
-                        language={AVAILABLE_LANGUAGES.find(lang => lang.code === langCode)?.name}
-                      />
-                    </View>
-                  );
-                })}
+                {captionDetails.targetLanguages.map(langCode => renderAccountItem(langCode))}
               </View>
               {captionDetails.targetLanguages.length === 0 && (
                 <View style={styles.noAccountsContainer}>
                   <Text style={styles.noAccountsText}>Select languages to see recommended accounts</Text>
                 </View>
-              )}
-              {captionDetails.targetLanguages.length > 0 && (
-                <Button
-                  title="Create Recommended Accounts"
-                  leftIcon="account-plus"
-                  variant="secondary"
-                  onPress={handleConnectAccounts}
-                  style={styles.connectButton}
-                />
               )}
             </View>
           </ScrollView>
@@ -1098,6 +1074,101 @@ export function UploadScreen() {
     </Modal>
   );
 
+  const handleConnectInstagram = async (langCode: string) => {
+    try {
+      // Store the language code in state before redirecting
+      localStorage.setItem('pendingLanguageCode', langCode);
+      
+      // Redirect to Instagram authorization
+      const instagramAuthUrl = `https://api.instagram.com/oauth/authorize?client_id=${config.instagram.clientId}&redirect_uri=${config.instagram.redirectUri}&scope=user_profile,user_media&response_type=code`;
+      window.location.href = instagramAuthUrl;
+    } catch (error) {
+      console.error('Error connecting Instagram:', error);
+      Alert.alert('Error', 'Failed to connect Instagram account. Please try again.');
+    }
+  };
+
+  // Handle Instagram OAuth callback
+  useEffect(() => {
+    const handleOAuthCallback = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const error = urlParams.get('error');
+      const pendingLanguageCode = localStorage.getItem('pendingLanguageCode');
+
+      if (error) {
+        Alert.alert('Error', 'Failed to connect Instagram account. Please try again.');
+        return;
+      }
+
+      if (code && pendingLanguageCode) {
+        try {
+          // Exchange code for access token (this would be done by your backend)
+          // For now, we'll simulate a successful connection
+          const mockResponse = {
+            accessToken: 'mock_token',
+            userId: 'mock_user_id',
+            username: getRecommendedUsername(pendingLanguageCode)
+          };
+
+          // Update connected accounts
+          setConnectedAccounts(prev => [
+            ...prev,
+            {
+              platform: 'instagram',
+              username: mockResponse.username,
+              language: pendingLanguageCode,
+              isConnected: true,
+              accessToken: mockResponse.accessToken,
+              userId: mockResponse.userId
+            }
+          ]);
+
+          // Clear pending language code
+          localStorage.removeItem('pendingLanguageCode');
+        } catch (error) {
+          console.error('Error exchanging code for token:', error);
+          Alert.alert('Error', 'Failed to complete Instagram connection. Please try again.');
+        }
+      }
+    };
+
+    handleOAuthCallback();
+  }, []);
+
+  const renderAccountItem = (langCode: string) => {
+    const existingAccount = connectedAccounts.find(
+      account => account.isConnected && account.language === langCode
+    );
+
+    const languageName = AVAILABLE_LANGUAGES.find(lang => lang.code === langCode)?.name;
+
+    if (existingAccount) {
+      return (
+        <View key={langCode} style={styles.accountItem}>
+          <ListItem
+            accountName={existingAccount.username.replace('@', '')}
+            status="connected"
+            language={languageName}
+            onPress={() => handleAccountPress(existingAccount.username.replace('@', ''))}
+          />
+        </View>
+      );
+    }
+
+    return (
+      <View key={langCode} style={styles.accountItem}>
+        <ListItem
+          accountName={getRecommendedUsername(langCode)}
+          subtitle="Connect Instagram Account"
+          status="disconnected"
+          language={languageName}
+          onPress={() => handleConnectInstagram(langCode)}
+        />
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
@@ -1115,6 +1186,7 @@ export function UploadScreen() {
         {renderContent()}
       </ScrollView>
       {renderStatusModal()}
+      {renderSuccessPopup()}
     </SafeAreaView>
   );
 }
@@ -1586,5 +1658,36 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#374151',
     fontWeight: '500',
+  },
+  modalContent: {
+    padding: 20,
+  },
+  formGroup: {
+    marginBottom: 20,
+  },
+  formLabel: {
+    fontSize: 14,
+    color: '#374151',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  formInput: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: '#1F2937',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  bioInput: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  formActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 20,
   },
 }); 

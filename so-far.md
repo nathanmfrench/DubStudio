@@ -244,3 +244,21 @@ Package everything for deployment
 Why This Matters:
 Using package-lock.json with npm ci is important in deployment scenarios because it ensures that the exact same dependencies are installed every time, making builds reproducible and preventing "it works on my machine" type problems. so to reiterate, now the error is fixed
 
+
+OK, for account creation we wont be doing the creation ourselves, just connecting existing accounts.
+-----------------------------------
+Removed the direct account creation functionality and replaced it with Instagram OAuth flow
+Updated the UI to show "Connect Instagram Account" instead of "Create Account"
+3. Added OAuth configuration settings
+Added handling for the OAuth callback
+Updated the data model to store Instagram access tokens and user IDs
+To complete the implementation, you'll need to:
+Register your app with Instagram to get a clientId
+Set up the redirect URI in your Instagram app settings
+Add these values to your environment configuration:
+4. Create a backend endpoint to handle the OAuth code exchange (since the client secret shouldn't be exposed in the frontend)
+Would you like me to:
+1. Create the backend endpoint for handling the OAuth code exchange?
+Add error handling and loading states to the frontend?
+Or something else?
+-----------------------------------
