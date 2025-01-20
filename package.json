@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "lottie-react-native": "^7.2.2",
     "react-native-linear-gradient": "^2.8.3"
   }
 }
