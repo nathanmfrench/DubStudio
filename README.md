@@ -1,5 +1,8 @@
 # DubStudio
 
+will need to update bundle ID, put domains in the meta developer console
+
+
 Let me explain what happened:
 
 1. **The Root Issue**: When you used `sudo npx cdk`, you were running the CDK commands as the root Linux user. However, your AWS credentials are stored in your user's home directory at `~/.aws/credentials`. The root user has a different home directory (`/root/.aws/`) and thus couldn't access your credentials.

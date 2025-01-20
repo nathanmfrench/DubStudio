@@ -18,7 +18,9 @@ export interface Config {
   };
   instagram: {
     clientId: string;
+    clientSecret: string;
     redirectUri: string;
+    scopes: string[];
   };
 }
 
@@ -51,7 +53,18 @@ const getConfig = (): Config => {
     },
     instagram: {
       clientId: Constants.expoConfig?.extra?.EXPO_PUBLIC_INSTAGRAM_CLIENT_ID || '',
+      clientSecret: Constants.expoConfig?.extra?.EXPO_PUBLIC_INSTAGRAM_CLIENT_SECRET || '',
       redirectUri: Constants.expoConfig?.extra?.EXPO_PUBLIC_INSTAGRAM_REDIRECT_URI || '',
+      scopes: [
+        'instagram_basic',
+        'instagram_manage_insights',
+        'instagram_content_publish',
+        'instagram_business_basic',
+        'instagram_business_content_publish',
+        'pages_show_list',
+        'pages_read_engagement',
+        'business_management'
+      ]
     }
   };
   
