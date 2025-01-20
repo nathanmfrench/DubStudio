@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, Dimensions, Alert, TextInput, TouchableOpacity, ScrollView, Platform, Animated } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Image, Dimensions, Alert, TextInput, TouchableOpacity, ScrollView, Platform, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,6 +11,8 @@ import Svg, { Path } from 'react-native-svg';
 import { fetchAuthSession, getCurrentUser, signOut } from 'aws-amplify/auth';
 import { apiEndpoints } from '../config/aws-config';
 import { config } from '../config/env';
+import { useFocusEffect } from '@react-navigation/native';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 
 interface VideoSelection {
   uri: string;
@@ -18,6 +20,7 @@ interface VideoSelection {
   name: string;
   duration: number;
   size: number;
+  thumbnailUri?: string;
 }
 
 interface CaptionDetails {
@@ -193,7 +196,6 @@ const validateVideoFormat = async (uri: string): Promise<boolean> => {
 
 export function UploadScreen() {
   const [selectedVideo, setSelectedVideo] = useState<VideoSelection | null>(null);
-  const [step, setStep] = useState<'select' | 'details'>('select');
   const [captionDetails, setCaptionDetails] = useState<CaptionDetails>({
     caption: '',
     targetLanguages: [],
@@ -210,17 +212,55 @@ export function UploadScreen() {
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus | null>(null);
   const [statusModalVisible, setStatusModalVisible] = useState(false);
   const [startTime] = useState(Date.now());
+  const [showCelebration, setShowCelebration] = useState(false);
+  const successScaleAnim = useRef(new Animated.Value(0)).current;
+  const successOpacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (showCelebration) {
+      Animated.sequence([
+        Animated.parallel([
+          Animated.spring(successScaleAnim, {
+            toValue: 1,
+            useNativeDriver: true,
+            tension: 50,
+            friction: 7,
+          }),
+          Animated.timing(successOpacityAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+
+      return () => {
+        successScaleAnim.setValue(0);
+        successOpacityAnim.setValue(0);
+      };
+    }
+  }, [showCelebration]);
+
+  // Add focus effect to reset state when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      // Reset all state to initial values
+      resetState();
+      setStatusModalVisible(false);
+      setShowCelebration(false);
+      setError(null);
+      setUploadProgress(0);
+      setProcessingStatus(null);
+      
+      // Return cleanup function
+      return () => {
+        // Optional: Any cleanup needed when screen loses focus
+      };
+    }, []) // Empty dependency array since we want this to run every time the screen is focused
+  );
 
   const handleBack = () => {
-    if (step === 'details') {
-      setStep('select');
-    } else {
-      setSelectedVideo(null);
-    }
-  };
-
-  const handleContinue = () => {
-    setStep('details');
+    setSelectedVideo(null);
   };
 
   const pickVideo = async () => {
@@ -228,9 +268,11 @@ export function UploadScreen() {
     
     if (permission.granted) {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'videos',
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
         allowsEditing: true,
         quality: 1,
+        videoMaxDuration: MAX_DURATION,
+        exif: true,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -256,18 +298,42 @@ export function UploadScreen() {
           return;
         }
 
-        // Get the actual MIME type from the blob
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-        const mimeType = blob.type || 'video/mp4';
+        try {
+          // Generate thumbnail from the first frame
+          const { uri: thumbnailUri } = await VideoThumbnails.getThumbnailAsync(asset.uri, {
+            time: 0,
+            quality: 0.5,
+          });
 
-        setSelectedVideo({
-          name: asset.fileName || 'Untitled',
-          uri: asset.uri,
-          duration: durationInSeconds,
-          type: mimeType,
-          size: asset.fileSize || 0,
-        });
+          // Get the actual MIME type from the blob
+          const response = await fetch(asset.uri);
+          const blob = await response.blob();
+          const mimeType = blob.type || 'video/mp4';
+
+          setSelectedVideo({
+            name: asset.fileName || 'Untitled',
+            uri: asset.uri,
+            duration: durationInSeconds,
+            type: mimeType,
+            size: asset.fileSize || 0,
+            thumbnailUri,
+          });
+        } catch (error) {
+          console.error('Error generating thumbnail:', error);
+          // Get the MIME type even if thumbnail generation fails
+          const response = await fetch(asset.uri);
+          const blob = await response.blob();
+          const mimeType = blob.type || 'video/mp4';
+          
+          // Continue without thumbnail if generation fails
+          setSelectedVideo({
+            name: asset.fileName || 'Untitled',
+            uri: asset.uri,
+            duration: durationInSeconds,
+            type: mimeType,
+            size: asset.fileSize || 0,
+          });
+        }
       }
     }
   };
@@ -364,9 +430,35 @@ export function UploadScreen() {
     </ScrollView>
   );
 
-  const renderVideoSelection = () => (
-    <View style={styles.content}>
-      {!selectedVideo ? (
+  const renderVideoPreview = () => {
+    if (!selectedVideo) return null;
+
+    return (
+      <View style={styles.videoPreviewStrip}>
+        <Image 
+          source={{ uri: selectedVideo.thumbnailUri || selectedVideo.uri }} 
+          style={styles.previewThumbnail}
+          resizeMode="cover"
+        />
+        <View style={styles.previewInfo}>
+          <View style={styles.infoItem}>
+            <MaterialCommunityIcons name="clock-outline" size={16} color="#2171C1" />
+            <Text style={styles.infoText}>{formatDuration(selectedVideo.duration)}</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.changeVideoButton}
+            onPress={pickVideo}
+          >
+            <Text style={styles.changeVideoText}>Change</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderContent = () => {
+    if (!selectedVideo) {
+      return (
         <View style={styles.uploadContainer}>
           <View style={styles.uploadCircle}>
             <LinearGradient
@@ -391,27 +483,98 @@ export function UploadScreen() {
             </View>
           </View>
         </View>
-      ) : (
-        <View style={styles.previewContainer}>
-          <Image 
-            source={{ uri: selectedVideo.uri }} 
-            style={styles.thumbnail}
-            resizeMode="cover"
-          />
-          <View style={styles.videoInfo}>
-            <View style={styles.infoItem}>
-              <MaterialCommunityIcons name="clock-outline" size={20} color="#2171C1" />
-              <Text style={styles.infoText}>
-                {formatDuration(selectedVideo.duration)}
-              </Text>
+      );
+    }
+
+    return (
+      <View style={styles.content}>
+        <View style={styles.detailsContainer}>
+          <ScrollView style={styles.scrollContent}>
+            {renderVideoPreview()}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Caption</Text>
+              <TextInput
+                style={styles.captionInput}
+                multiline
+                placeholder="Enter your video caption..."
+                value={captionDetails.caption}
+                onChangeText={(text) => setCaptionDetails(prev => ({ ...prev, caption: text }))}
+              />
             </View>
-            <View style={styles.infoItem}>
-              <MaterialCommunityIcons name="file-outline" size={20} color="#2171C1" />
-              <Text style={styles.infoText}>
-                {formatFileSize(selectedVideo.size)}
-              </Text>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.languagesLabel}>Select Languages (Video & Caption)</Text>
+              <View style={styles.languageGrid}>
+                {AVAILABLE_LANGUAGES.map(lang => (
+                  <TouchableOpacity
+                    key={lang.code}
+                    style={[
+                      styles.languageButton,
+                      captionDetails.targetLanguages.includes(lang.code) && styles.languageButtonSelected
+                    ]}
+                    onPress={() => toggleLanguage(lang.code)}
+                  >
+                    <Text style={[
+                      styles.languageButtonText,
+                      captionDetails.targetLanguages.includes(lang.code) && styles.languageButtonTextSelected
+                    ]}>
+                      {lang.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-          </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Post to Accounts</Text>
+              <View style={styles.accountsList}>
+                {captionDetails.targetLanguages.map((langCode, index) => {
+                  const existingAccount = connectedAccounts.find(
+                    account => account.isConnected && account.language === langCode
+                  );
+
+                  if (existingAccount) {
+                    return (
+                      <View key={langCode} style={styles.accountItem}>
+                        <ListItem
+                          accountName={existingAccount.username.replace('@', '')}
+                          status="connected"
+                          language={AVAILABLE_LANGUAGES.find(lang => lang.code === langCode)?.name}
+                          onPress={() => handleAccountPress(existingAccount.username.replace('@', ''))}
+                        />
+                      </View>
+                    );
+                  }
+
+                  return (
+                    <View key={langCode} style={styles.accountItem}>
+                      <ListItem
+                        accountName={getRecommendedUsername(langCode)}
+                        subtitle="Recommended account name"
+                        status="disconnected"
+                        language={AVAILABLE_LANGUAGES.find(lang => lang.code === langCode)?.name}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+              {captionDetails.targetLanguages.length === 0 && (
+                <View style={styles.noAccountsContainer}>
+                  <Text style={styles.noAccountsText}>Select languages to see recommended accounts</Text>
+                </View>
+              )}
+              {captionDetails.targetLanguages.length > 0 && (
+                <Button
+                  title="Create Recommended Accounts"
+                  leftIcon="account-plus"
+                  variant="secondary"
+                  onPress={handleConnectAccounts}
+                  style={styles.connectButton}
+                />
+              )}
+            </View>
+          </ScrollView>
+
           <View style={styles.actions}>
             <Button
               title="Back"
@@ -421,16 +584,26 @@ export function UploadScreen() {
               style={styles.actionButton}
             />
             <Button
-              title="Continue"
-              leftIcon="arrow-right"
-              onPress={handleContinue}
+              title={isUploading ? "Uploading..." : "Upload"}
+              leftIcon="cloud-upload"
+              onPress={handleUpload}
               style={styles.actionButton}
+              disabled={isUploading || !selectedVideo || captionDetails.targetLanguages.length === 0}
             />
           </View>
         </View>
-      )}
-    </View>
-  );
+
+        <Modal
+          visible={!!selectedAccount}
+          onClose={() => setSelectedAccount(null)}
+          title="Account Dashboard"
+          size="large"
+        >
+          {renderDashboard()}
+        </Modal>
+      </View>
+    );
+  };
 
   const resetState = () => {
     setSelectedVideo(null);
@@ -439,7 +612,6 @@ export function UploadScreen() {
       targetLanguages: [],
       id: `VID_${Date.now()}`
     });
-    setStep('select');
     setIsUploading(false);
   };
 
@@ -534,6 +706,7 @@ export function UploadScreen() {
       if (!['completed', 'failed', 'dubbed'].includes(status)) {
         setTimeout(() => pollVideoStatus(videoId), 5000);
       } else if (status === 'completed' || status === 'dubbed') {
+        setShowCelebration(true);
         // Show completion for a moment before closing
         setTimeout(() => {
           setStatusModalVisible(false);
@@ -762,122 +935,63 @@ export function UploadScreen() {
     }
   };
 
-  const renderCaptionDetails = () => (
-    <View style={styles.content}>
-      <View style={styles.detailsContainer}>
-        <ScrollView style={styles.scrollContent}>
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Caption</Text>
-            <TextInput
-              style={styles.captionInput}
-              multiline
-              placeholder="Enter your video caption..."
-              value={captionDetails.caption}
-              onChangeText={(text) => setCaptionDetails(prev => ({ ...prev, caption: text }))}
-            />
-          </View>
+  const handleProceed = () => {
+    Animated.parallel([
+      Animated.timing(successScaleAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(successOpacityAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShowCelebration(false);
+      setStatusModalVisible(false);
+      resetState();
+    });
+  };
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.languagesLabel}>Select Languages (Video & Caption)</Text>
-            <View style={styles.languageGrid}>
-              {AVAILABLE_LANGUAGES.map(lang => (
-                <TouchableOpacity
-                  key={lang.code}
-                  style={[
-                    styles.languageButton,
-                    captionDetails.targetLanguages.includes(lang.code) && styles.languageButtonSelected
-                  ]}
-                  onPress={() => toggleLanguage(lang.code)}
-                >
-                  <Text style={[
-                    styles.languageButtonText,
-                    captionDetails.targetLanguages.includes(lang.code) && styles.languageButtonTextSelected
-                  ]}>
-                    {lang.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Post to Accounts</Text>
-            <View style={styles.accountsList}>
-              {captionDetails.targetLanguages.map((langCode, index) => {
-                const existingAccount = connectedAccounts.find(
-                  account => account.isConnected && account.language === langCode
-                );
-
-                if (existingAccount) {
-                  return (
-                    <View key={langCode} style={styles.accountItem}>
-                      <ListItem
-                        accountName={existingAccount.username.replace('@', '')}
-                        status="connected"
-                        language={AVAILABLE_LANGUAGES.find(lang => lang.code === langCode)?.name}
-                        onPress={() => handleAccountPress(existingAccount.username.replace('@', ''))}
-                      />
-                    </View>
-                  );
-                }
-
-                return (
-                  <View key={langCode} style={styles.accountItem}>
-                    <ListItem
-                      accountName={getRecommendedUsername(langCode)}
-                      subtitle="Recommended account name"
-                      status="disconnected"
-                      language={AVAILABLE_LANGUAGES.find(lang => lang.code === langCode)?.name}
-                    />
-                  </View>
-                );
-              })}
-            </View>
-            {captionDetails.targetLanguages.length === 0 && (
-              <View style={styles.noAccountsContainer}>
-                <Text style={styles.noAccountsText}>Select languages to see recommended accounts</Text>
-              </View>
-            )}
-            {captionDetails.targetLanguages.length > 0 && (
-              <Button
-                title="Create Recommended Accounts"
-                leftIcon="account-plus"
-                variant="secondary"
-                onPress={handleConnectAccounts}
-                style={styles.connectButton}
-              />
-            )}
-          </View>
-        </ScrollView>
-
-        <View style={styles.actions}>
-          <Button
-            title="Back"
-            variant="secondary"
-            leftIcon="arrow-left"
-            onPress={handleBack}
-            style={styles.actionButton}
-          />
-          <Button
-            title={isUploading ? "Uploading..." : "Upload"}
-            leftIcon="cloud-upload"
-            onPress={handleUpload}
-            style={styles.actionButton}
-            disabled={isUploading || !selectedVideo || captionDetails.targetLanguages.length === 0}
+  const renderSuccessPopup = () => {
+    const languageCount = processingStatus?.languages ? Object.keys(processingStatus.languages).length : 0;
+    
+    return (
+      <Animated.View 
+        style={[
+          styles.successPopup,
+          {
+            opacity: successOpacityAnim,
+            transform: [
+              { scale: successScaleAnim },
+              { translateY: successScaleAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [50, 0],
+              })},
+            ],
+          },
+        ]}
+      >
+        <View style={styles.successIconContainer}>
+          <MaterialCommunityIcons 
+            name="check-circle" 
+            size={40} 
+            color="#34D399"
           />
         </View>
-      </View>
-
-      <Modal
-        visible={!!selectedAccount}
-        onClose={() => setSelectedAccount(null)}
-        title="Account Dashboard"
-        size="large"
-      >
-        {renderDashboard()}
-      </Modal>
-    </View>
-  );
+        <Text style={styles.successTitle}>Processing Complete!</Text>
+        <Text style={styles.successMessage}>
+          Successfully processed your video in {languageCount} language{languageCount !== 1 ? 's' : ''}.
+        </Text>
+        <Button
+          title="Proceed"
+          onPress={handleProceed}
+          style={styles.proceedButton}
+        />
+      </Animated.View>
+    );
+  };
 
   const renderStatusModal = () => (
     <Modal
@@ -891,28 +1005,38 @@ export function UploadScreen() {
       size="small"
     >
       <View style={styles.statusContent}>
-        <View style={styles.statusHeader}>
-          <MaterialCommunityIcons
-            name={
-              processingStatus?.status === 'completed' ? 'check-circle' :
-              processingStatus?.status === 'failed' ? 'alert-circle' :
-              'progress-clock'
-            }
-            size={24}
-            color={
-              processingStatus?.status === 'completed' ? '#34D399' :
-              processingStatus?.status === 'failed' ? '#EF4444' :
-              '#2171C1'
-            }
-          />
-          <Text style={styles.statusTitle}>
-            {processingStatus?.status === 'pending_upload' ? 'Preparing Upload...' :
-             processingStatus?.status === 'uploading' ? 'Uploading Video...' :
-             processingStatus?.status === 'processing' ? 'Processing Video...' :
-             processingStatus?.status === 'completed' ? 'Processing Complete!' :
-             'Processing Failed'}
-          </Text>
+        <View style={styles.stageIndicator}>
+          <View style={[styles.stage, styles.stageCompleted]}>
+            <MaterialCommunityIcons name="check-circle" size={20} color="#34D399" />
+            <Text style={styles.stageText}>Upload</Text>
+          </View>
+          <View style={[styles.stageLine, processingStatus?.status !== 'pending_upload' ? styles.stageLineCompleted : null]} />
+          <View style={[styles.stage, processingStatus?.status === 'processing' ? styles.stageActive : processingStatus?.status === 'completed' ? styles.stageCompleted : null]}>
+            <MaterialCommunityIcons 
+              name={processingStatus?.status === 'completed' ? "check-circle" : "clock-outline"} 
+              size={20} 
+              color={processingStatus?.status === 'completed' ? "#34D399" : processingStatus?.status === 'processing' ? "#2171C1" : "#9CA3AF"} 
+            />
+            <Text style={[styles.stageText, processingStatus?.status === 'processing' ? styles.stageTextActive : null]}>Process</Text>
+          </View>
+          <View style={[styles.stageLine, processingStatus?.status === 'completed' ? styles.stageLineCompleted : null]} />
+          <View style={[styles.stage, processingStatus?.status === 'completed' ? styles.stageCompleted : null]}>
+            <MaterialCommunityIcons 
+              name={processingStatus?.status === 'completed' ? "check-circle" : "flag-outline"} 
+              size={20} 
+              color={processingStatus?.status === 'completed' ? "#34D399" : "#9CA3AF"} 
+            />
+            <Text style={styles.stageText}>Complete</Text>
+          </View>
         </View>
+
+        <Text style={styles.statusMessage}>
+          {processingStatus?.status === 'pending_upload' ? 'Preparing your video for upload...' :
+           processingStatus?.status === 'uploading' ? 'Uploading your video to our servers...' :
+           processingStatus?.status === 'processing' ? 'Processing your video(s). This may take up to a minute...' :
+           processingStatus?.status === 'completed' ? 'All done! Your video has been processed successfully.' :
+           'An error occurred during processing.'}
+        </Text>
 
         {processingStatus?.status === 'uploading' && (
           <View style={styles.progressContainer}>
@@ -932,18 +1056,17 @@ export function UploadScreen() {
           <View style={styles.languageStatusList}>
             {Object.entries(processingStatus.languages).map(([lang, status]) => (
               <View key={lang} style={styles.languageStatusItem}>
-                <View style={styles.languageStatusHeader}>
-                  <Text style={styles.languageStatusText}>
+                <View style={styles.languageTag}>
+                  <Text style={styles.languageTagText}>
                     {AVAILABLE_LANGUAGES.find(l => l.code === lang)?.name}
                   </Text>
                   <MaterialCommunityIcons
                     name={
                       status.status === 'completed' ? 'check-circle' :
                       status.status === 'failed' ? 'alert-circle' :
-                      status.status === 'processing' ? 'progress-clock' :
-                      'clock-outline'
+                      'progress-clock'
                     }
-                    size={18}
+                    size={16}
                     color={
                       status.status === 'completed' ? '#34D399' :
                       status.status === 'failed' ? '#EF4444' :
@@ -969,6 +1092,8 @@ export function UploadScreen() {
         {processingStatus?.error && (
           <Text style={styles.errorText}>{processingStatus.error}</Text>
         )}
+
+        {showCelebration && renderSuccessPopup()}
       </View>
     </Modal>
   );
@@ -987,7 +1112,7 @@ export function UploadScreen() {
         end={{ x: 0.5, y: 1 }}
       />
       <ScrollView style={styles.scrollContent}>
-        {step === 'select' ? renderVideoSelection() : renderCaptionDetails()}
+        {renderContent()}
       </ScrollView>
       {renderStatusModal()}
     </SafeAreaView>
@@ -1092,12 +1217,11 @@ const styles = StyleSheet.create({
   infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 24,
+    gap: 4,
   },
   infoText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#1F2937',
+    fontSize: 13,
+    color: '#374151',
   },
   actions: {
     flexDirection: 'row',
@@ -1295,16 +1419,47 @@ const styles = StyleSheet.create({
   statusContent: {
     padding: 16,
   },
-  statusHeader: {
+  stageIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingHorizontal: 12,
   },
-  statusTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
+  stage: {
+    alignItems: 'center',
+    opacity: 0.5,
+  },
+  stageActive: {
+    opacity: 1,
+  },
+  stageCompleted: {
+    opacity: 1,
+  },
+  stageLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 8,
+  },
+  stageLineCompleted: {
+    backgroundColor: '#34D399',
+  },
+  stageText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  stageTextActive: {
+    color: '#2171C1',
+    fontWeight: '500',
+  },
+  statusMessage: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 20,
   },
   progressContainer: {
     marginBottom: 16,
@@ -1332,18 +1487,104 @@ const styles = StyleSheet.create({
   languageStatusItem: {
     gap: 4,
   },
-  languageStatusHeader: {
+  languageTag: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 8,
+    alignSelf: 'flex-start',
   },
-  languageStatusText: {
+  languageTagText: {
     fontSize: 14,
     color: '#374151',
+    fontWeight: '500',
+  },
+  celebrationContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  proceedButton: {
+    marginTop: 16,
+    minWidth: 120,
   },
   errorText: {
     fontSize: 14,
     color: '#EF4444',
     marginTop: 12,
+  },
+  successPopup: {
+    position: 'absolute',
+    bottom: 40,
+    left: 20,
+    right: 20,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 20,
+  },
+  successIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  successTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  successMessage: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  videoPreviewStrip: {
+    flexDirection: 'row',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+    height: 72,
+  },
+  previewThumbnail: {
+    width: 72,
+    height: 72,
+    backgroundColor: '#E5E7EB',
+  },
+  previewInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    justifyContent: 'space-between',
+  },
+  changeVideoButton: {
+    backgroundColor: '#E5E7EB',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  changeVideoText: {
+    fontSize: 13,
+    color: '#374151',
+    fontWeight: '500',
   },
 }); 
