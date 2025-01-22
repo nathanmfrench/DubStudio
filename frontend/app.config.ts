@@ -8,6 +8,8 @@ const envPath = path.resolve(__dirname, '..', `.env.${env}`);
 console.log('Loading environment from:', envPath);
 dotenv.config({ path: envPath });
 
+const BUNDLE_IDENTIFIER = 'tech.voxium.dubstudio';
+
 export default ({ config }: ConfigContext): ExpoConfig => {
   // Log loaded environment variables
   console.log('Loaded environment variables:', {
@@ -37,7 +39,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'tech.voxium.dubstudio',
+      bundleIdentifier: BUNDLE_IDENTIFIER,
       buildNumber: '1',
       config: {
         usesNonExemptEncryption: false
@@ -54,8 +56,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         FacebookAppID: '1125481698703055',
         FacebookClientToken: '950bf5366410fca4ce7afec23c16b6df',
         FacebookDisplayName: 'DubStudio',
-        FacebookAutoLogAppEventsEnabled: false,
-        FacebookAdvertiserIDCollectionEnabled: false,
+        FacebookAutoLogAppEventsEnabled: true,
+        FacebookAdvertiserIDCollectionEnabled: true,
+        NSUserTrackingUsageDescription: "This identifier will be used to deliver personalized ads to you.",
         LSApplicationQueriesSchemes: [
           'fbapi',
           'fb-messenger-api',
@@ -69,7 +72,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#ffffff'
       },
-      package: 'tech.voxium.dubstudio',
+      package: BUNDLE_IDENTIFIER,
       versionCode: 1,
       permissions: [
         'CAMERA',
@@ -93,9 +96,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           clientToken: '950bf5366410fca4ce7afec23c16b6df',
           displayName: 'DubStudio',
           scheme: 'fb1125481698703055',
-          advertiserIDCollectionEnabled: false,
-          autoLogAppEventsEnabled: false,
-          isAutoInitEnabled: false,
+          advertiserIDCollectionEnabled: true,
+          autoLogAppEventsEnabled: true,
+          isAutoInitEnabled: true,
           iosUserTrackingPermission: "This identifier will be used to deliver personalized ads to you."
         }
       ]
