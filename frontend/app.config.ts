@@ -40,7 +40,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ios: {
       supportsTablet: true,
       bundleIdentifier: BUNDLE_IDENTIFIER,
-      buildNumber: '1',
       config: {
         usesNonExemptEncryption: false
       },
@@ -92,12 +91,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       [
         'react-native-fbsdk-next',
         {
-          appID: '1125481698703055',
-          clientToken: '950bf5366410fca4ce7afec23c16b6df',
-          displayName: 'DubStudio',
-          scheme: 'fb1125481698703055',
-          advertiserIDCollectionEnabled: true,
-          autoLogAppEventsEnabled: true,
+          appID: "1125481698703055",
+          clientToken: "950bf5366410fca4ce7afec23c16b6df",
+          displayName: "DubStudio",
+          scheme: "fb1125481698703055",
+          advertiserIDCollectionEnabled: false,
+          autoLogAppEventsEnabled: false,
           isAutoInitEnabled: true,
           iosUserTrackingPermission: "This identifier will be used to deliver personalized ads to you."
         }
