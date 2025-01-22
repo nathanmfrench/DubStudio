@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Settings, LoginManager, AccessToken } from 'react-native-fbsdk-next';
 import { facebookService } from '../services/FacebookService';
 
@@ -10,10 +10,16 @@ export function FacebookTest() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if SDK is initialized
-    const isInitialized = facebookService.isInitialized();
-    setSdkInitialized(isInitialized);
-    console.log('Facebook SDK initialized:', isInitialized);
+    try {
+      // Only check if SDK is initialized
+      const isInitialized = facebookService.isInitialized();
+      console.log('Facebook SDK initialized check:', isInitialized);
+      setSdkInitialized(isInitialized);
+    } catch (err) {
+      console.error('Facebook SDK status check error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to check Facebook SDK status');
+      Alert.alert('Facebook SDK Error', 'Failed to check Facebook SDK status');
+    }
   }, []);
 
   const handleLogin = async () => {
@@ -38,8 +44,10 @@ export function FacebookTest() {
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error occurred');
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(errorMessage);
       setLoginStatus('Login failed');
+      Alert.alert('Login Error', errorMessage);
     }
   };
 
@@ -51,9 +59,28 @@ export function FacebookTest() {
       setError(null);
     } catch (err) {
       console.error('Logout error:', err);
-      setError(err instanceof Error ? err.message : 'Logout failed');
+      const errorMessage = err instanceof Error ? err.message : 'Logout failed';
+      setError(errorMessage);
+      Alert.alert('Logout Error', errorMessage);
     }
   };
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Facebook SDK Test</Text>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Error: {error}</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.button, styles.loginButton]}
+          onPress={() => setError(null)}
+        >
+          <Text style={styles.buttonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -70,12 +97,6 @@ export function FacebookTest() {
           {permissions.map((permission, index) => (
             <Text key={index}>• {permission}</Text>
           ))}
-        </View>
-      )}
-
-      {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
         </View>
       )}
 
@@ -106,9 +127,9 @@ const styles = StyleSheet.create({
     margin: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   title: {
     fontSize: 20,
@@ -130,15 +151,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
     borderRadius: 5,
   },
-  errorContainer: {
-    backgroundColor: '#ffebee',
-    padding: 10,
-    borderRadius: 5,
-    marginBottom: 20,
-  },
-  errorText: {
-    color: '#c62828',
-  },
   buttonContainer: {
     gap: 10,
   },
@@ -148,13 +160,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loginButton: {
-    backgroundColor: '#4267B2',
+    backgroundColor: '#1877F2', // Facebook blue
   },
   logoutButton: {
-    backgroundColor: '#898F9C',
+    backgroundColor: '#E4E6EB', // Facebook gray
   },
   buttonText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  errorContainer: {
+    padding: 10,
+    backgroundColor: '#ffebee',
+    borderRadius: 5,
+    marginBottom: 20,
+  },
+  errorText: {
+    color: '#d32f2f',
   },
 }); 
