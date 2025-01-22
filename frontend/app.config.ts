@@ -21,12 +21,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ...config,
     name: 'DubStudio',
     slug: 'dubstudio',
+    owner: 'nfrench17',
     version: '1.0.0',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
+    scheme: 'voxium',
     splash: {
-      image: './assets/splash.png',
+      image: './assets/splash-icon.png',
       resizeMode: 'contain',
       backgroundColor: '#ffffff'
     },
@@ -35,15 +37,46 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.dubstudio.app'
+      bundleIdentifier: 'tech.voxium.dubstudio',
+      buildNumber: '1',
+      config: {
+        usesNonExemptEncryption: false
+      },
+      infoPlist: {
+        CFBundleURLTypes: [
+          {
+            CFBundleURLSchemes: [
+              'fb1125481698703055',
+              'voxium'
+            ]
+          }
+        ],
+        FacebookAppID: '1125481698703055',
+        FacebookClientToken: '950bf5366410fca4ce7afec23c16b6df',
+        FacebookDisplayName: 'DubStudio',
+        FacebookAutoLogAppEventsEnabled: false,
+        FacebookAdvertiserIDCollectionEnabled: false,
+        LSApplicationQueriesSchemes: [
+          'fbapi',
+          'fb-messenger-api',
+          'fbauth2',
+          'fbshareextension'
+        ]
+      }
     },
     android: {
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#ffffff'
       },
-      package: 'com.dubstudio.app',
-      permissions: ['CAMERA', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE']
+      package: 'tech.voxium.dubstudio',
+      versionCode: 1,
+      permissions: [
+        'CAMERA',
+        'READ_EXTERNAL_STORAGE',
+        'WRITE_EXTERNAL_STORAGE',
+        'INTERNET'
+      ]
     },
     plugins: [
       [
@@ -51,6 +84,19 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         {
           photosPermission: 'Allow DubStudio to access your photos for video uploads.',
           cameraPermission: 'Allow DubStudio to access your camera for video recording.'
+        }
+      ],
+      [
+        'react-native-fbsdk-next',
+        {
+          appID: '1125481698703055',
+          clientToken: '950bf5366410fca4ce7afec23c16b6df',
+          displayName: 'DubStudio',
+          scheme: 'fb1125481698703055',
+          advertiserIDCollectionEnabled: false,
+          autoLogAppEventsEnabled: false,
+          isAutoInitEnabled: false,
+          iosUserTrackingPermission: "This identifier will be used to deliver personalized ads to you."
         }
       ]
     ],
@@ -62,6 +108,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       EXPO_PUBLIC_AWS_REGION: process.env.EXPO_PUBLIC_AWS_REGION,
       EXPO_PUBLIC_AWS_USER_POOL_ID: process.env.EXPO_PUBLIC_AWS_USER_POOL_ID,
       EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID: process.env.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID,
-    },
+      eas: {
+        projectId: 'a3a24494-5f90-4ec5-8609-cd7eecfe29b3'
+      }
+    }
   };
 }; 

@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "a3a24494-5f90-4ec5-8609-cd7eecfe29b3"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.nfrench17.dubstudio"
+    }
+  }
+}
