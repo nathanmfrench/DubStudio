@@ -1,5 +1,8 @@
 todo:
-
+make fire promotional template that creators can build on.
+scheduler built in as a pro feature, more videos to higher tiers.
+pricing is $1320 per 15000 videos approximately
+ai writer included? idk bruh
 right now defaults to english to x language, but mabe in future start rolling out other languages.
 dub an existing video (thing in elevenlabs api where you can dub from source url)
 add number of speakers in the video so the user can select how many speakers there are
