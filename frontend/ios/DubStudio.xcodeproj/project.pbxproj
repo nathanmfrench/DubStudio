@@ -14,7 +14,7 @@
 		96905EF65AED1B983A6B3ABC /* libPods-DubStudio.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 58EEBF8E8E6FB1BC6CAF49B5 /* libPods-DubStudio.a */; };
 		B18059E884C0ABDD17F3DC3D /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC715A2D49A985799AEE119 /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		EDB168ABF4D044A2A6EBB869 /* noop-file.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BA15FD785C8404C843D859A /* noop-file.swift */; };
+		E79D560F989E4FAB90E4CE5A /* noop-file.swift in Sources */ = {isa = PBXBuildFile; fileRef = F191E4C80CD540E48EFAD442 /* noop-file.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -31,8 +31,8 @@
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		FAC715A2D49A985799AEE119 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-DubStudio/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		7BA15FD785C8404C843D859A /* noop-file.swift */ = {isa = PBXFileReference; name = "noop-file.swift"; path = "DubStudio/noop-file.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
-		ACA20189B8924F7C86FD953A /* DubStudio-Bridging-Header.h */ = {isa = PBXFileReference; name = "DubStudio-Bridging-Header.h"; path = "DubStudio/DubStudio-Bridging-Header.h"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; explicitFileType = undefined; includeInIndex = 0; };
+		F191E4C80CD540E48EFAD442 /* noop-file.swift */ = {isa = PBXFileReference; name = "noop-file.swift"; path = "DubStudio/noop-file.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
+		C0D0D9ECB90A427F80A99F26 /* DubStudio-Bridging-Header.h */ = {isa = PBXFileReference; name = "DubStudio-Bridging-Header.h"; path = "DubStudio/DubStudio-Bridging-Header.h"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; explicitFileType = undefined; includeInIndex = 0; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -57,8 +57,8 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				13B07FB71A68108700A75B9A /* main.m */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				7BA15FD785C8404C843D859A /* noop-file.swift */,
-				ACA20189B8924F7C86FD953A /* DubStudio-Bridging-Header.h */,
+				F191E4C80CD540E48EFAD442 /* noop-file.swift */,
+				C0D0D9ECB90A427F80A99F26 /* DubStudio-Bridging-Header.h */,
 			);
 			name = DubStudio;
 			sourceTree = "<group>";
@@ -198,7 +198,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				B92B75E0B7724562BCD28EDC /* DubStudio-Bridging-Header.h in Resources */,
+				0C6042B8D16046E3B74F66DE /* DubStudio-Bridging-Header.h in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -274,7 +274,7 @@
 				13B07FBC1A68108700A75B9A /* AppDelegate.mm in Sources */,
 				13B07FC11A68108700A75B9A /* main.m in Sources */,
 				B18059E884C0ABDD17F3DC3D /* ExpoModulesProvider.swift in Sources */,
-				EDB168ABF4D044A2A6EBB869 /* noop-file.swift in Sources */,
+				E79D560F989E4FAB90E4CE5A /* noop-file.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

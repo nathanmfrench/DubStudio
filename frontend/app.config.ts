@@ -35,7 +35,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       backgroundColor: '#ffffff'
     },
     assetBundlePatterns: [
-      '**/*'
+      '**/*',
+      'node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/*'
     ],
     ios: {
       supportsTablet: true,
@@ -64,7 +65,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           'fbauth2',
           'fbshareextension'
         ]
-      }
+      },
     },
     android: {
       adaptiveIcon: {
@@ -112,7 +113,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID: process.env.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID,
       eas: {
         projectId: 'a3a24494-5f90-4ec5-8609-cd7eecfe29b3'
-      }
+      },
+      hostUri: "192.168.1.30:19000", // Add this line
     }
   };
 }; 

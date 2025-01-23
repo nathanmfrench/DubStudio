@@ -4,7 +4,7 @@ import type { FacebookLoginResult, FacebookProfile, FacebookPage, InstagramBusin
 
 class FacebookService {
   private static instance: FacebookService;
-  private initialized: boolean = false;
+  private static initialized: boolean = false;
 
   private constructor() {
     console.log('FacebookService: Creating new instance');
@@ -19,7 +19,7 @@ class FacebookService {
   }
 
   public initialize(): void {
-    if (this.initialized) {
+    if (FacebookService.initialized) {
       console.log('FacebookService: Already initialized, skipping');
       return;
     }
@@ -35,7 +35,7 @@ class FacebookService {
       Settings.setAppID(appId);
       console.log('FacebookService: App ID set');
       
-      this.initialized = true;
+      FacebookService.initialized = true;
       console.log('FacebookService: Initialization complete');
     } catch (error) {
       console.error('FacebookService: Initialization failed:', error);
@@ -44,8 +44,8 @@ class FacebookService {
   }
 
   public isInitialized(): boolean {
-    console.log('FacebookService: Checking initialization status:', this.initialized);
-    return this.initialized;
+    console.log('FacebookService: Checking initialization status:', FacebookService.initialized);
+    return FacebookService.initialized;
   }
 
   public async login(): Promise<FacebookLoginResult> {

@@ -8,7 +8,7 @@ import { ListItem } from '../components/ListItem';
 import { Modal } from '../components/Modal';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
-import { fetchAuthSession, getCurrentUser, signOut } from 'aws-amplify/auth';
+import { fetchAuthSession } from 'aws-amplify/auth';
 import { apiEndpoints } from '../config/aws-config';
 import { config } from '../config/env';
 import { useFocusEffect } from '@react-navigation/native';
@@ -740,7 +740,7 @@ export function UploadScreen() {
       
       // Get current auth session
       console.log('[Upload] Fetching auth session...');
-      const session = await fetchAuthSession().catch(error => {
+      const session = await fetchAuthSession().catch((error: any) => {
         console.error('[Upload] Auth session error:', error);
         throw new Error('Failed to authenticate. Please try logging in again.');
       });
