@@ -1,23 +1,44 @@
 todo:
-make fire promotional template that creators can build on. \n
-scheduler built in as a pro feature, more videos to higher tiers.\n
-pricing is $1320 per 15000 videos approximately\n
-ai writer included? mino recommendation. scheduler for sure, analytics for higher paying customers \n
-right now defaults to english to x language, but mabe in future start rolling out other languages. \n
-dub an existing video (thing in elevenlabs api where you can dub from source url) \n 
-add number of speakers in the video so the user can select how many speakers there are \n
+check Blake anderson marketing section of his guide
+
+yt videos on stripe integration, paywalling (in my yt history)
+
+Rich Cottrell for small funding for targeted ad campaigns through google ads
+
+make fire promotional template that creators can build on.
+
+scheduler built in as a pro feature, more videos to higher tiers.
+
+pricing is $1320 per 15000 videos approximately
+
+ai writer included? mino recommendation. scheduler for sure, analytics for higher paying customers 
+
+right now defaults to english to x language, but mabe in future start rolling out other languages. 
+
+dub an existing video (thing in elevenlabs api where you can dub from source url) 
+
+add number of speakers in the video so the user can select how many speakers there are 
+
 remove watermark
+
 drop background audio
+
 highest resolution
+
 time zone optimization for each rwgion, post scheduling
+
 maybe make it so that you have to pay extra for the dashboards (these can be pricey with many users)
+
 fix dashboards to look better
+
 change components to make it prettier.
+
 center elements to make prettier.
+
 make sure accounts persist and are seen by all of the places they need to be seen (post to accounts list, etc)
+
 make upload button actually do stuff, with nice loading animations for when its working in progress.
 
-make wavy design in the background of all the screens maybe
 
 Here are all the components we've created:
 
