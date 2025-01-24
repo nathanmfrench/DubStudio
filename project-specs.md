@@ -1,4 +1,7 @@
 todo:
+
+find a more methodical way of debugging this problem (maybe with dads apple)
+
 check Blake anderson marketing section of his guide
 
 yt videos on stripe integration, paywalling (in my yt history)
