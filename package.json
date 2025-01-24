@@ -8,11 +8,9 @@
     "infrastructure"
   ],
   "scripts": {
-    "start:frontend": "cd frontend && expo start",
-    "build:eas": "cd frontend && eas build --profile production",
-    "deploy:infra": "cd infrastructure && npm run deploy"
-  },
-  "devDependencies": {
-    "eas-cli": "^8.1.0"
+    "start:frontend": "yarn workspace frontend expo start",
+    "build:eas": "yarn workspace frontend eas build --profile production",
+    "deploy:infra": "yarn workspace infrastructure cdk deploy"
   }
 }
+
