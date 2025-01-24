@@ -1,61 +1,61 @@
 import React, { useEffect, useState } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AppNavigator } from './navigation/AppNavigator';
-import { AuthProvider } from './contexts/AuthContext';
-import { testConfig } from './utils/test-config';
-import './config/aws-config';
-import { facebookService } from './services/FacebookService';
+import { Amplify } from 'aws-amplify';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { Settings } from 'react-native-fbsdk-next';
-import { loadFonts } from './utils/loadFonts';
-import { View, ActivityIndicator } from 'react-native';
+
+// Contexts and Services
+import { AuthProvider } from '../src/contexts/AuthContext';
+import { facebookService } from '../src/services/FacebookService';
+
+// Utilities and Config
+import { loadFonts } from '../src/utils/loadFonts';
+import * as awsconfig from '../src/config/aws-config';
+import { testConfig } from '../src/utils/test-config';
+
+// Navigation
+import { AppNavigator } from '../src/navigation/AppNavigator';
+
+// Initialize Amplify
+Amplify.configure(awsconfig as any);
 
 export default function App() {
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [appReady, setAppReady] = useState(false);
 
   useEffect(() => {
-    const initializeSDKs = async () => {
+    const initializeApp = async () => {
       try {
-        console.log('Starting SDK initialization...');
-        
-        // Initialize Facebook SDK first
+        console.log('Starting app initialization...');
+
+        // 1. Initialize Facebook SDK
         Settings.initializeSDK();
-        console.log('Facebook SDK initialized');
-        
-        // Initialize our Facebook service
         facebookService.initialize();
-        console.log('Facebook service initialized');
-        
-        // Request tracking permission
+        console.log('Facebook services initialized');
+
+        // 2. Request tracking permissions
         const { status } = await requestTrackingPermissionsAsync();
-        console.log('Tracking permission status:', status);
-        
         if (status === 'granted') {
           await Settings.setAdvertiserTrackingEnabled(true);
-          console.log('Advertiser tracking enabled');
         }
-        
-        // Load fonts last since they're not critical for Facebook
-        await loadFonts();
-        console.log('Fonts loaded');
-        
-        // Run any test configurations
-        await testConfig();
-        
-        setIsInitialized(true);
-        console.log('All initialization complete');
+        console.log('Tracking status:', status);
+
+        // 3. Load fonts and test config
+        await Promise.all([loadFonts(), testConfig()]);
+        console.log('Fonts and config loaded');
+
       } catch (error) {
-        console.error('Failed to initialize:', error);
-        // Still set initialized to true to not block the app
-        setIsInitialized(true);
+        console.error('Initialization error:', error);
+      } finally {
+        setAppReady(true);
       }
     };
 
-    initializeSDKs();
+    initializeApp();
   }, []);
 
-  if (!isInitialized) {
+  if (!appReady) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" />
@@ -72,4 +72,4 @@ export default function App() {
       </AuthProvider>
     </SafeAreaProvider>
   );
-} 
+}
