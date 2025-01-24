@@ -1,14 +1,15 @@
 {
   "dependencies": {
+    "expo": "~52.0.27",
     "expo-dev-client": "~5.0.10",
     "expo-facebook": "^12.2.0",
     "expo-tracking-transparency": "^5.1.1",
     "lottie-react-native": "^7.2.2",
+    "react": "18.3.1",
+    "react-native": "0.76.6",
     "react-native-fbsdk-next": "^13.4.0",
     "react-native-linear-gradient": "^2.8.3",
-    "expo": "~52.0.27",
-    "react": "18.3.1",
-    "react-native": "0.76.6"
+    "yarn": "^1.22.22"
   },
   "name": "dubstudio",
   "version": "1.0.0",
