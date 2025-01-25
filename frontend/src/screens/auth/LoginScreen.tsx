@@ -27,7 +27,7 @@ export function LoginScreen({ navigation }: { navigation: any }) {
     >
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.welcomeText}>Welcome,</Text>
+          <Text style={styles.welcomeText}>Welcome</Text>
           <Text style={styles.subText}>Glad to see you!</Text>
         </View>
 
