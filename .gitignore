@@ -213,3 +213,5 @@ yarn-error.*
 
 ios/
 android/
+
+rootkey.csv

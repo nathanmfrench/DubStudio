@@ -1,6 +1,21 @@
-import { Amplify } from 'aws-amplify';
 import { fetchAuthSession, getCurrentUser } from 'aws-amplify/auth';
 import { config } from './env';
+import Constants from 'expo-constants';
+
+console.log('Expo Config:', Constants.expoConfig?.extra);
+console.log('AWS Config being used:', {
+  region: config.aws.region,
+  userPoolId: config.aws.userPoolId,
+  userPoolClientId: config.aws.userPoolClientId
+});
+
+console.log('Raw environment variables:', {
+  userPoolId: process.env.EXPO_PUBLIC_AWS_USER_POOL_ID,
+  userPoolClientId: process.env.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID,
+  region: process.env.EXPO_PUBLIC_AWS_REGION
+});
+
+console.log('Config object:', config.aws);
 
 // Check for required AWS configuration
 if (!config.aws.userPoolId || !config.aws.userPoolClientId || !config.aws.region) {
@@ -12,25 +27,19 @@ if (!config.aws.userPoolId || !config.aws.userPoolClientId || !config.aws.region
   throw new Error('Missing required AWS configuration');
 }
 
-// Configure Amplify
-const amplifyConfig = {
+// Export the configuration object
+export const amplifyConfig = {
   Auth: {
     Cognito: {
       userPoolId: config.aws.userPoolId,
       userPoolClientId: config.aws.userPoolClientId,
-      region: config.aws.region,
-      oauth: {
-        scopes: ['openid', 'email', 'profile']
-      }
+      region: config.aws.region
     }
   }
 };
 
-console.log('Configuring Amplify with:', JSON.stringify(amplifyConfig, null, 2));
-Amplify.configure(amplifyConfig);
-
-// Check initial auth state
-async function checkAuthState() {
+// Export the check function to be called after configuration
+export async function checkAuthState() {
   try {
     const user = await getCurrentUser();
     console.log('Current user found:', user.username);
@@ -51,9 +60,7 @@ async function checkAuthState() {
   }
 }
 
-checkAuthState();
-
-// API endpoints configuration
+// Export API endpoints configuration separately
 export const apiEndpoints = {
   videos: {
     upload: `${config.api.baseUrl}/v1/videos`,

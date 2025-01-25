@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Amplify } from 'aws-amplify';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { Settings } from 'react-native-fbsdk-next';
+import { amplifyConfig, checkAuthState } from './config/aws-config';
 
 // Contexts and Services
 import { AuthProvider } from '../src/contexts/AuthContext';
@@ -12,14 +13,13 @@ import { facebookService } from '../src/services/FacebookService';
 
 // Utilities and Config
 import { loadFonts } from '../src/utils/loadFonts';
-import * as awsconfig from '../src/config/aws-config';
 import { testConfig } from '../src/utils/test-config';
 
 // Navigation
 import { AppNavigator } from '../src/navigation/AppNavigator';
 
-// Initialize Amplify
-Amplify.configure(awsconfig as any);
+// Initialize Amplify with the configuration
+Amplify.configure(amplifyConfig);
 
 export default function App() {
   const [appReady, setAppReady] = useState(false);
@@ -28,6 +28,9 @@ export default function App() {
     const initializeApp = async () => {
       try {
         console.log('Starting app initialization...');
+        
+        // Check auth state after Amplify is configured
+        await checkAuthState();
 
         // 1. Initialize Facebook SDK
         Settings.initializeSDK();
