@@ -1,5 +1,5 @@
 # DubStudio
-
+there is a different config setup for expo-fbsdk-next android and ios 
 will need to update bundle ID, put domains in the meta developer console
 
 

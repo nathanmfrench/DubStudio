@@ -113,7 +113,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       eas: {
         projectId: 'a3a24494-5f90-4ec5-8609-cd7eecfe29b3'
       },
-      hostUri: "192.168.1.30:19000", // Add this line
+      hostUri: "dubstudio.voxium.tech", // Add this line
     }
   };
 }; 

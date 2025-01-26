@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Image, Dimensions, Alert, TextInput, TouchableOpacity, ScrollView, Platform, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Image, Dimensions, Alert, TextInput, TouchableOpacity, ScrollView, Platform, Animated, Easing, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import * as ImagePicker from 'expo-image-picker';
@@ -13,6 +13,8 @@ import { apiEndpoints } from '../config/aws-config';
 import { config } from '../config/env';
 import { useFocusEffect } from '@react-navigation/native';
 import * as VideoThumbnails from 'expo-video-thumbnails';
+import { facebookService } from '../services/FacebookService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface VideoSelection {
   uri: string;
@@ -281,7 +283,7 @@ export function UploadScreen() {
     
     if (permission.granted) {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        mediaTypes: ['videos'],
         allowsEditing: true,
         quality: 1,
         videoMaxDuration: MAX_DURATION,
@@ -374,8 +376,33 @@ export function UploadScreen() {
     });
   };
 
-  const handleConnectAccounts = () => {
-    // Navigate to accounts screen
+  const handleConnectAccounts = async () => {
+    try {
+      // Initialize Facebook SDK if not already initialized
+      if (!facebookService.isInitialized()) {
+        facebookService.initialize();
+      }
+
+      // Attempt Facebook login
+      const loginResult = await facebookService.login();
+      console.log('Facebook login successful:', loginResult);
+
+      // Get user profile after successful login
+      const profile = await facebookService.getUserProfile();
+      console.log('Facebook profile:', profile);
+
+      // Get user's Facebook pages
+      const pages = await facebookService.getPages();
+      console.log('Facebook pages:', pages);
+
+      // You might want to store this information or update UI
+      // For now, we'll just show a success message
+      Alert.alert('Success', 'Facebook account connected successfully!');
+
+    } catch (error) {
+      console.error('Facebook connection error:', error);
+      Alert.alert('Error', 'Failed to connect Facebook account. Please try again.');
+    }
   };
 
   const getRecommendedUsername = (language: string) => {
@@ -1076,12 +1103,14 @@ export function UploadScreen() {
 
   const handleConnectInstagram = async (langCode: string) => {
     try {
-      // Store the language code in state before redirecting
-      localStorage.setItem('pendingLanguageCode', langCode);
+      // Store the language code using AsyncStorage
+      await AsyncStorage.setItem('pendingLanguageCode', langCode);
       
       // Redirect to Instagram authorization
       const instagramAuthUrl = `https://api.instagram.com/oauth/authorize?client_id=${config.instagram.clientId}&redirect_uri=${config.instagram.redirectUri}&scope=user_profile,user_media&response_type=code`;
-      window.location.href = instagramAuthUrl;
+      
+      // Use Linking for opening URLs in React Native
+      await Linking.openURL(instagramAuthUrl);
     } catch (error) {
       console.error('Error connecting Instagram:', error);
       Alert.alert('Error', 'Failed to connect Instagram account. Please try again.');
@@ -1094,7 +1123,7 @@ export function UploadScreen() {
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
       const error = urlParams.get('error');
-      const pendingLanguageCode = localStorage.getItem('pendingLanguageCode');
+      const pendingLanguageCode = await AsyncStorage.getItem('pendingLanguageCode');
 
       if (error) {
         Alert.alert('Error', 'Failed to connect Instagram account. Please try again.');
@@ -1125,7 +1154,7 @@ export function UploadScreen() {
           ]);
 
           // Clear pending language code
-          localStorage.removeItem('pendingLanguageCode');
+          await AsyncStorage.removeItem('pendingLanguageCode');
         } catch (error) {
           console.error('Error exchanging code for token:', error);
           Alert.alert('Error', 'Failed to complete Instagram connection. Please try again.');
