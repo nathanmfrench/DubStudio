@@ -10,7 +10,13 @@
   "scripts": {
     "start:frontend": "yarn workspace frontend npx expo start",
     "build:eas": "yarn workspace frontend eas build --profile production",
-    "deploy:infra": "yarn workspace infrastructure cdk deploy"
+    "deploy:infra": "yarn workspace infrastructure cdk deploy",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
+  },
+  "dependencies": {
+    "expo": "~52.0.27",
+    "react": "18.3.1",
+    "react-native": "0.76.6"
   }
 }
-

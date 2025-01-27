@@ -1,0 +1,8 @@
+{
+  "android": {
+    "package": "com.nfrench17.dubstudio"
+  },
+  "ios": {
+    "bundleIdentifier": "com.nfrench17.dubstudio"
+  }
+}

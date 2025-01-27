@@ -5,6 +5,7 @@
     "owner": "nfrench17",
     "version": "1.0.0",
     "orientation": "portrait",
+    "newArchEnabled": true,
     "icon": "./src/assets/app-icon.png",
     "userInterfaceStyle": "light",
     "splash": {
@@ -17,14 +18,24 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.voxium.dubstudio"
+      "bundleIdentifier": "com.voxium.dubstudio",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "DubStudio needs access to your media library to upload videos for translation and posting.",
+        "NSPhotoLibraryAddUsageDescription": "DubStudio needs access to save translated videos to your media library.",
+        "NSCameraUsageDescription": "DubStudio needs camera access to record videos for translation and posting."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/app-icon.png",
         "backgroundColor": "#1F1F1F"
       },
-      "package": "com.voxium.dubstudio"
+      "package": "com.voxium.dubstudio",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "plugins": [
       [

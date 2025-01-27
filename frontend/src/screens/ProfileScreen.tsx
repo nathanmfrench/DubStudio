@@ -6,7 +6,6 @@ import { Button } from '../components/Button';
 import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
-import { FacebookTest } from '../components/FacebookTest';
 
 const { width } = Dimensions.get('window');
 
@@ -170,8 +169,6 @@ export function ProfileScreen() {
           {renderSettingsItem('information-outline', 'About', 'App version and information')}
           {renderSettingsItem('logout', 'Sign Out', 'Sign out of your account', handleSignOut)}
         </View>
-
-        <FacebookTest />
       </ScrollView>
     </SafeAreaView>
   );

@@ -413,8 +413,8 @@ export function AccountsScreen() {
         
         <View style={styles.bottomContainer}>
           <Button
-            title="Connect Facebook"
-            leftIcon="facebook"
+            title={connectedAccounts.length > 0 ? "Add Account" : "Connect Facebook"}
+            leftIcon={connectedAccounts.length > 0 ? "account-plus" : "facebook"}
             onPress={handleConnectFacebook}
             loading={isLoading}
           />

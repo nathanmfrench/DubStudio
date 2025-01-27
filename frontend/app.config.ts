@@ -84,7 +84,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       [
         'expo-image-picker',
         {
-          photosPermission: 'Allow DubStudio to access your photos for video uploads.',
+          photosPermission: 'Allow DubStudio to access your videos.',
           cameraPermission: 'Allow DubStudio to access your camera for video recording.'
         }
       ],

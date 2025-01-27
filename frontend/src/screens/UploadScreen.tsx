@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Platform, Alert, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Platform, Alert, TextInput, Linking, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import * as ImagePicker from 'expo-image-picker';
@@ -209,12 +209,19 @@ export function UploadScreen() {
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
   const navigation = useNavigation<NavigationProps>();
   const [languageSearch, setLanguageSearch] = useState('');
+  const [translateCaption, setTranslateCaption] = useState(true);
+  const [autoGenerateSubtitles, setAutoGenerateSubtitles] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   const loadAccounts = async () => {
     try {
+      console.log('Loading connected accounts...');
       const saved = await AsyncStorage.getItem('connectedAccounts');
+      console.log('Saved accounts:', saved);
       if (saved) {
-        setConnectedAccounts(JSON.parse(saved));
+        const accounts = JSON.parse(saved);
+        console.log('Parsed accounts:', accounts);
+        setConnectedAccounts(accounts);
       }
     } catch (error) {
       console.error('Error loading accounts:', error);
@@ -223,20 +230,46 @@ export function UploadScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
+      console.log('Screen focused, loading accounts...');
       loadAccounts();
     }, [])
   );
 
   const pickVideo = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
-    if (permission.granted) {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      console.log('Media library permission status:', permission);
+      
+      if (!permission.granted) {
+        Alert.alert(
+          "Permission Required",
+          "DubStudio needs access to your media library to upload videos.",
+          [
+            {
+              text: "Open Settings",
+              onPress: () => {
+                Platform.OS === 'ios' 
+                  ? Linking.openURL('app-settings:')
+                  : Linking.openSettings();
+              }
+            },
+            {
+              text: "Cancel",
+              style: "cancel"
+            }
+          ]
+        );
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        mediaTypes: "videos",
         allowsEditing: true,
         quality: 1,
         videoMaxDuration: MAX_DURATION,
       });
+
+      console.log('Image picker result:', result);
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
@@ -284,6 +317,8 @@ export function UploadScreen() {
           });
         }
       }
+    } catch (error) {
+      console.error('Error picking video:', error);
     }
   };
 
@@ -302,9 +337,17 @@ export function UploadScreen() {
     );
   };
 
-  const filteredLanguages = AVAILABLE_LANGUAGES.filter(lang =>
-    lang.name.toLowerCase().includes(languageSearch.toLowerCase())
-  );
+  const filteredLanguages = AVAILABLE_LANGUAGES
+    .filter(lang => lang.name.toLowerCase().includes(languageSearch.toLowerCase()))
+    .sort((a, b) => {
+      const aSelected = selectedLanguages.includes(a.code);
+      const bSelected = selectedLanguages.includes(b.code);
+      
+      if (aSelected && !bSelected) return -1;
+      if (!aSelected && bSelected) return 1;
+      
+      return a.name.localeCompare(b.name);
+    });
 
   const renderLanguageSelector = () => (
     <View style={styles.languageSection}>
@@ -402,6 +445,98 @@ export function UploadScreen() {
     </TouchableOpacity>
   );
 
+  const handleConnectFacebook = async () => {
+    setIsLoading(true);
+    try {
+      if (!facebookService.isInitialized()) {
+        facebookService.initialize();
+      }
+
+      const loginResult = await facebookService.login();
+      
+      // Handle user cancellation
+      if (!loginResult || !loginResult.accessToken) {
+        setIsLoading(false);
+        return; // Silently return without showing an error
+      }
+
+      const pages = await facebookService.getPages();
+
+      if (!pages || pages.length === 0) {
+        Alert.alert(
+          'No Facebook Pages Found',
+          'You need to have a Facebook Page to connect Instagram business accounts. Would you like to create one?',
+          [
+            {
+              text: 'Create Page',
+              onPress: () => Linking.openURL('https://www.facebook.com/pages/create'),
+            },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+        return;
+      }
+
+      const instagramAccounts = await Promise.all(
+        pages.map(async (page) => {
+          try {
+            const instagramAccount = await facebookService.getInstagramBusinessAccount(page.id);
+            return { pageId: page.id, pageName: page.name, instagramAccount };
+          } catch (error) {
+            console.error(`Error fetching Instagram account for page ${page.name}:`, error);
+            return { pageId: page.id, pageName: page.name, instagramAccount: null };
+          }
+        })
+      );
+
+      const connectedAccounts = instagramAccounts.filter(acc => acc.instagramAccount);
+
+      if (connectedAccounts.length === 0) {
+        Alert.alert(
+          'No Instagram Business Accounts',
+          'Would you like to connect an Instagram account to one of your Facebook pages?',
+          [
+            {
+              text: 'Connect Instagram',
+              onPress: () => Linking.openURL('https://business.facebook.com/settings/instagram'),
+            },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+        return;
+      }
+
+      const updatedAccounts = connectedAccounts.map(acc => ({
+        platform: 'instagram' as const,
+        username: acc.instagramAccount?.username || '',
+        isConnected: true,
+        accessToken: loginResult.accessToken,
+        userId: acc.instagramAccount?.id || '',
+        pageId: acc.pageId,
+        pageName: acc.pageName,
+      }));
+
+      setConnectedAccounts(updatedAccounts);
+      
+      // Store accounts in AsyncStorage for persistence
+      await AsyncStorage.setItem('connectedAccounts', JSON.stringify(updatedAccounts));
+
+      Alert.alert(
+        'Success',
+        `Connected ${updatedAccounts.length} Instagram business account${updatedAccounts.length > 1 ? 's' : ''}.`
+      );
+
+    } catch (error) {
+      console.error('Connection error:', error);
+      // Only show alert for non-cancellation errors
+      if (error instanceof Error && !error.message.includes('cancelled')) {
+        Alert.alert('Error', 'Failed to connect accounts. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {!selectedVideo ? (
@@ -420,7 +555,18 @@ export function UploadScreen() {
             {renderLanguageSelector()}
 
             <View style={styles.captionContainer}>
-              <Text style={styles.sectionTitle}>Caption</Text>
+              <View style={styles.captionHeader}>
+                <Text style={styles.sectionTitle}>Caption</Text>
+                <View style={styles.translateToggle}>
+                  <Text style={styles.toggleLabel}>Translate</Text>
+                  <Switch
+                    value={translateCaption}
+                    onValueChange={setTranslateCaption}
+                    trackColor={{ false: '#E5E7EB', true: '#93C5FD' }}
+                    thumbColor={translateCaption ? '#2171C1' : '#9CA3AF'}
+                  />
+                </View>
+              </View>
               <TextInput
                 style={styles.captionInput}
                 placeholder="Write a caption..."
@@ -429,18 +575,47 @@ export function UploadScreen() {
                 multiline
                 maxLength={2200}
               />
-              <View style={styles.captionHint}>
-                <MaterialCommunityIcons name="translate" size={16} color="#6B7280" />
-                <Text style={styles.hintText}>
-                  Your caption will be translated into your selected languages
-                </Text>
+              {translateCaption && (
+                <View style={styles.captionHint}>
+                  <MaterialCommunityIcons name="translate" size={16} color="#6B7280" />
+                  <Text style={styles.hintText}>
+                    Your caption will be translated into: {selectedLanguages.length > 0 
+                      ? selectedLanguages.map(code => 
+                          AVAILABLE_LANGUAGES.find(lang => lang.code === code)?.name
+                        ).join(', ')
+                      : 'No languages selected'}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.subtitlesContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Subtitles</Text>
+                <View style={styles.translateToggle}>
+                  <Text style={styles.toggleLabel}>Auto-Generate</Text>
+                  <Switch
+                    value={autoGenerateSubtitles}
+                    onValueChange={setAutoGenerateSubtitles}
+                    trackColor={{ false: '#E5E7EB', true: '#93C5FD' }}
+                    thumbColor={autoGenerateSubtitles ? '#2171C1' : '#9CA3AF'}
+                  />
+                </View>
+              </View>
+              
+              <View style={styles.subtitlesButtonContainer}>
+                <Button
+                  title="Subtitle Editor"
+                  onPress={() => console.log('clicked subtitle editor button')}
+                  variant="secondary"
+                />
               </View>
             </View>
 
             <View style={styles.accountsSection}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Post to Accounts</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('Accounts')}>
+                <TouchableOpacity onPress={handleConnectFacebook}>
                   <Text style={styles.addAccountText}>Add Account</Text>
                 </TouchableOpacity>
               </View>
@@ -460,7 +635,7 @@ export function UploadScreen() {
               ) : (
                 <TouchableOpacity 
                   style={styles.noAccountsButton}
-                  onPress={() => navigation.navigate('Accounts')}
+                  onPress={handleConnectFacebook}
                 >
                   <MaterialCommunityIcons name="account-plus" size={24} color="#2171C1" />
                   <Text style={styles.noAccountsText}>Connect an account to post</Text>
@@ -571,11 +746,16 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 24,
   },
+  captionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1F2937',
-    marginBottom: 12,
   },
   captionInput: {
     fontSize: 16,
@@ -701,5 +881,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6B7280',
     flex: 1,
+  },
+  translateToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  toggleLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  subtitlesContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+  },
+  subtitlesButtonContainer: {
+    gap: 12,
+    marginTop: 12,
   },
 }); 
