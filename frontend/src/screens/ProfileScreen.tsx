@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import Svg, { Path } from 'react-native-svg';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
@@ -105,18 +104,7 @@ export function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={[
-          'rgba(33, 113, 193, 0.9)',
-          'rgba(33, 113, 193, 0.4)',
-          'rgba(33, 113, 193, 0.3)',
-          'transparent'
-        ]}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      />
-      <ScrollView style={styles.scrollContent}>
+      <View style={styles.content}>
         {/* Profile Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Profile</Text>
@@ -164,12 +152,10 @@ export function ProfileScreen() {
         <View style={[styles.settingsContainer, styles.elevatedCard]}>
           <Text style={styles.sectionTitle}>Settings</Text>
           {renderSettingsItem('account-cog', 'Account Settings', 'Privacy, security, and more')}
-          {renderSettingsItem('bell-outline', 'Notifications', 'Manage your notifications')}
           {renderSettingsItem('help-circle-outline', 'Help & Support', 'Get help with DubStudio')}
-          {renderSettingsItem('information-outline', 'About', 'App version and information')}
           {renderSettingsItem('logout', 'Sign Out', 'Sign out of your account', handleSignOut)}
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -177,10 +163,11 @@ export function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFFFFF',
   },
-  scrollContent: {
+  content: {
     flex: 1,
+    paddingTop: 16,
   },
   header: {
     flexDirection: 'row',

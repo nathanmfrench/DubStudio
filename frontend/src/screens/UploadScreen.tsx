@@ -539,121 +539,124 @@ export function UploadScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {!selectedVideo ? (
-        <View style={styles.centerContainer}>
-          {renderUploadArea()}
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Upload</Text>
         </View>
-      ) : (
-        <>
-          <ScrollView style={styles.content}>
-            <View style={styles.header}>
-              <Text style={styles.title}>Upload Video</Text>
-            </View>
-
+        
+        {!selectedVideo ? (
+          <View style={styles.centerContainer}>
             {renderUploadArea()}
-
-            {renderLanguageSelector()}
-
-            <View style={styles.captionContainer}>
-              <View style={styles.captionHeader}>
-                <Text style={styles.sectionTitle}>Caption</Text>
-                <View style={styles.translateToggle}>
-                  <Text style={styles.toggleLabel}>Translate</Text>
-                  <Switch
-                    value={translateCaption}
-                    onValueChange={setTranslateCaption}
-                    trackColor={{ false: '#E5E7EB', true: '#93C5FD' }}
-                    thumbColor={translateCaption ? '#2171C1' : '#9CA3AF'}
-                  />
-                </View>
-              </View>
-              <TextInput
-                style={styles.captionInput}
-                placeholder="Write a caption..."
-                value={caption}
-                onChangeText={setCaption}
-                multiline
-                maxLength={2200}
-              />
-              {translateCaption && (
-                <View style={styles.captionHint}>
-                  <MaterialCommunityIcons name="translate" size={16} color="#6B7280" />
-                  <Text style={styles.hintText}>
-                    Your caption will be translated into: {selectedLanguages.length > 0 
-                      ? selectedLanguages.map(code => 
-                          AVAILABLE_LANGUAGES.find(lang => lang.code === code)?.name
-                        ).join(', ')
-                      : 'No languages selected'}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.subtitlesContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Subtitles</Text>
-                <View style={styles.translateToggle}>
-                  <Text style={styles.toggleLabel}>Auto-Generate</Text>
-                  <Switch
-                    value={autoGenerateSubtitles}
-                    onValueChange={setAutoGenerateSubtitles}
-                    trackColor={{ false: '#E5E7EB', true: '#93C5FD' }}
-                    thumbColor={autoGenerateSubtitles ? '#2171C1' : '#9CA3AF'}
-                  />
-                </View>
-              </View>
-              
-              <View style={styles.subtitlesButtonContainer}>
-                <Button
-                  title="Subtitle Editor"
-                  onPress={() => console.log('clicked subtitle editor button')}
-                  variant="secondary"
-                />
-              </View>
-            </View>
-
-            <View style={styles.accountsSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Post to Accounts</Text>
-                <TouchableOpacity onPress={handleConnectFacebook}>
-                  <Text style={styles.addAccountText}>Add Account</Text>
-                </TouchableOpacity>
-              </View>
-              
-              {connectedAccounts.length > 0 ? (
-                <View style={styles.accountsList}>
-                  {connectedAccounts.map((account, index) => (
-                    <View key={account.userId || index} style={styles.accountItem}>
-                      <ListItem
-                        accountName={account.username}
-                        subtitle={`Connected via ${account.pageName}`}
-                        status="connected"
-                      />
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <TouchableOpacity 
-                  style={styles.noAccountsButton}
-                  onPress={handleConnectFacebook}
-                >
-                  <MaterialCommunityIcons name="account-plus" size={24} color="#2171C1" />
-                  <Text style={styles.noAccountsText}>Connect an account to post</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </ScrollView>
-
-          <View style={styles.footer}>
-            <Button
-              title={isUploading ? "Uploading..." : "Upload Video"}
-              onPress={handleUpload}
-              loading={isUploading}
-              disabled={connectedAccounts.length === 0 || selectedLanguages.length === 0}
-            />
           </View>
-        </>
-      )}
+        ) : (
+          <>
+            <ScrollView style={styles.content}>
+
+              {renderUploadArea()}
+
+              {renderLanguageSelector()}
+
+              <View style={styles.captionContainer}>
+                <View style={styles.captionHeader}>
+                  <Text style={styles.sectionTitle}>Caption</Text>
+                  <View style={styles.translateToggle}>
+                    <Text style={styles.toggleLabel}>Translate</Text>
+                    <Switch
+                      value={translateCaption}
+                      onValueChange={setTranslateCaption}
+                      trackColor={{ false: '#E5E7EB', true: '#93C5FD' }}
+                      thumbColor={translateCaption ? '#2171C1' : '#9CA3AF'}
+                    />
+                  </View>
+                </View>
+                <TextInput
+                  style={styles.captionInput}
+                  placeholder="Write a caption..."
+                  value={caption}
+                  onChangeText={setCaption}
+                  multiline
+                  maxLength={2200}
+                />
+                {translateCaption && (
+                  <View style={styles.captionHint}>
+                    <MaterialCommunityIcons name="translate" size={16} color="#6B7280" />
+                    <Text style={styles.hintText}>
+                      Your caption will be translated into: {selectedLanguages.length > 0 
+                        ? selectedLanguages.map(code => 
+                            AVAILABLE_LANGUAGES.find(lang => lang.code === code)?.name
+                          ).join(', ')
+                        : 'No languages selected'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.subtitlesContainer}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Subtitles</Text>
+                  <View style={styles.translateToggle}>
+                    <Text style={styles.toggleLabel}>Auto-Generate</Text>
+                    <Switch
+                      value={autoGenerateSubtitles}
+                      onValueChange={setAutoGenerateSubtitles}
+                      trackColor={{ false: '#E5E7EB', true: '#93C5FD' }}
+                      thumbColor={autoGenerateSubtitles ? '#2171C1' : '#9CA3AF'}
+                    />
+                  </View>
+                </View>
+                
+                <View style={styles.subtitlesButtonContainer}>
+                  <Button
+                    title="Subtitle Editor"
+                    onPress={() => console.log('clicked subtitle editor button')}
+                    variant="secondary"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.accountsSection}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Post to Accounts</Text>
+                  <TouchableOpacity onPress={handleConnectFacebook}>
+                    <Text style={styles.addAccountText}>Add Account</Text>
+                  </TouchableOpacity>
+                </View>
+                
+                {connectedAccounts.length > 0 ? (
+                  <View style={styles.accountsList}>
+                    {connectedAccounts.map((account, index) => (
+                      <View key={account.userId || index} style={styles.accountItem}>
+                        <ListItem
+                          accountName={account.username}
+                          subtitle={`Connected via ${account.pageName}`}
+                          status="connected"
+                        />
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <TouchableOpacity 
+                    style={styles.noAccountsButton}
+                    onPress={handleConnectFacebook}
+                  >
+                    <MaterialCommunityIcons name="account-plus" size={24} color="#2171C1" />
+                    <Text style={styles.noAccountsText}>Connect an account to post</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </ScrollView>
+
+            <View style={styles.footer}>
+              <Button
+                title={isUploading ? "Uploading..." : "Upload Video"}
+                onPress={handleUpload}
+                loading={isUploading}
+                disabled={connectedAccounts.length === 0 || selectedLanguages.length === 0}
+              />
+            </View>
+          </>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -661,25 +664,29 @@ export function UploadScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFFFFF',
+  },
+  content: {
+    flex: 1,
+    paddingTop: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    paddingBottom: 8,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2171C1',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  header: {
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#1F2937',
   },
   uploadArea: {
     backgroundColor: '#FFFFFF',

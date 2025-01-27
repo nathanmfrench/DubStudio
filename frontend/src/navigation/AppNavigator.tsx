@@ -2,7 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { AccountsScreen, UploadScreen, ProfileScreen } from '../screens';
+import { AccountsScreen, UploadScreen, ProfileScreen, AnalyticsScreen } from '../screens';
 import { AuthNavigator } from './AuthNavigator';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -19,6 +19,15 @@ function TabNavigator() {
       }}
     >
       <Tab.Screen
+        name="Accounts"
+        component={AccountsScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="account-group" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
         name="Upload"
         component={UploadScreen}
         options={{
@@ -28,11 +37,11 @@ function TabNavigator() {
         }}
       />
       <Tab.Screen
-        name="Accounts"
-        component={AccountsScreen}
+        name="Analytics"
+        component={AnalyticsScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="account-group" size={size} color={color} />
+            <MaterialCommunityIcons name="chart-bar" size={size} color={color} />
           ),
         }}
       />
