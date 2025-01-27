@@ -13,6 +13,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useTier } from '../contexts/TierContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { FlingGestureHandler, Directions, State, FlingGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
 
 interface VideoSelection {
   name: string;
@@ -719,19 +721,6 @@ export function UploadScreen() {
           </View>
         </View>
 
-        <View style={[styles.inputContainer, {
-          backgroundColor: colors.surface,
-          borderColor: colors.cardBorder
-        }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Subtitles</Text>
-          <View style={styles.subtitleNote}>
-            <MaterialCommunityIcons name="information" size={20} color={colors.textSecondary} />
-            <Text style={[styles.subtitleNoteText, { color: colors.textSecondary }]}>
-              You'll be able to edit and customize subtitles in the next step
-            </Text>
-          </View>
-        </View>
-
         <View style={styles.footer}>
           <Button
             title="Continue"
@@ -962,49 +951,77 @@ export function UploadScreen() {
     );
   };
 
+  const handleSwipeRight = ({ nativeEvent }: FlingGestureHandlerStateChangeEvent) => {
+    if (nativeEvent.state === State.END && currentStep > 1) {
+      goToPreviousStep();
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={[styles.title, { color: colors.primary }]}>New Post</Text>
-            <Text style={[styles.stepIndicator, { color: colors.textSecondary }]}>
-              Step {currentStep} of 5
-            </Text>
-          </View>
-          <View style={styles.headerRight}>
-            <TierBadge tier={currentTier} />
-          </View>
-        </View>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <FlingGestureHandler
+          direction={Directions.RIGHT}
+          onHandlerStateChange={handleSwipeRight}
+        >
+          <View style={styles.content}>
+            <View style={styles.header}>
+              <View style={styles.headerLeft}>
+                {currentStep > 1 && (
+                  <TouchableOpacity
+                    onPress={goToPreviousStep}
+                    style={styles.backButton}
+                  >
+                    <MaterialCommunityIcons
+                      name="chevron-left"
+                      size={24}
+                      color={colors.primary}
+                    />
+                  </TouchableOpacity>
+                )}
+                <Text style={[styles.title, { color: colors.primary }]}>New Post</Text>
+                <Text style={[styles.stepIndicator, { color: colors.textSecondary }]}>
+                  Step {currentStep} of 5
+                </Text>
+              </View>
+              <View style={styles.headerRight}>
+                <TierBadge tier={currentTier} />
+              </View>
+            </View>
 
-        <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollContainer}>
-          {currentStep === 1 ? (
-            !selectedVideo ? (
-              renderUploadArea()
-            ) : (
-              <>
-                {renderVideoPreview()}
-                <View style={styles.footer}>
-                  <Button
-                    title="Continue"
-                    onPress={goToNextStep}
-                    variant="primary"
-                    disabled={!selectedVideo.thumbnailUri}
-                  />
-                </View>
-              </>
-            )
-          ) : currentStep === 2 ? (
-            renderStep2()
-          ) : currentStep === 3 ? (
-            renderStep3()
-          ) : currentStep === 4 ? (
-            renderStep4()
-          ) : currentStep === 5 ? (
-            renderStep5()
-          ) : null}
-        </ScrollView>
-      </View>
+            <ScrollView 
+              style={styles.scrollContent} 
+              contentContainerStyle={styles.scrollContainer}
+            >
+              {currentStep === 1 ? (
+                !selectedVideo ? (
+                  renderUploadArea()
+                ) : (
+                  <>
+                    {renderVideoPreview()}
+                    <View style={styles.footer}>
+                      <Button
+                        title="Continue"
+                        onPress={goToNextStep}
+                        variant="primary"
+                        disabled={!selectedVideo.thumbnailUri}
+                      />
+                    </View>
+                  </>
+                )
+              ) : currentStep === 2 ? (
+                renderStep2()
+              ) : currentStep === 3 ? (
+                renderStep3()
+              ) : currentStep === 4 ? (
+                renderStep4()
+              ) : currentStep === 5 ? (
+                renderStep5()
+              ) : null}
+            </ScrollView>
+          </View>
+        </FlingGestureHandler>
+      </GestureHandlerRootView>
     </SafeAreaView>
   );
 }
@@ -1192,16 +1209,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginRight: 12,
   },
-  subtitleNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 4,
-  },
-  subtitleNoteText: {
-    flex: 1,
-    fontSize: 14,
-  },
   deliveryOptions: {
     gap: 12,
   },
@@ -1242,5 +1249,9 @@ const styles = StyleSheet.create({
   reviewValue: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  backButton: {
+    padding: 4,
+    marginRight: 8,
   },
 }); 
