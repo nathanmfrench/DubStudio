@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Platform, Alert, TextInput, Linking, Switch } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Platform, Alert, TextInput, Linking, Switch, Animated, LayoutAnimation } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { TierBadge } from '../components/TierBadge';
@@ -15,10 +15,10 @@ import { useTier } from '../contexts/TierContext';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface VideoSelection {
-  uri: string;
-  type: string;
   name: string;
+  uri: string;
   duration: number;
+  type: string;
   size: number;
   thumbnailUri?: string;
 }
@@ -78,7 +78,17 @@ interface AccountCreationDetails {
   languageName: string;
 }
 
+interface UploadState {
+  sourceLanguage: string;
+  caption: string;
+  targetLanguages: string[];
+  translateCaptions: boolean;
+  deliveryOption: 'post' | 'schedule' | 'download' | '';
+  scheduledDate?: Date;
+}
+
 const AVAILABLE_LANGUAGES = [
+  { code: 'en', name: 'English' },
   { code: 'hi', name: 'Hindi' },
   { code: 'pt', name: 'Portuguese' },
   { code: 'zh', name: 'Chinese' },
@@ -207,43 +217,30 @@ export function UploadScreen() {
   const { currentTier } = useTier();
   const { colors, isDarkMode } = useTheme();
   const [selectedVideo, setSelectedVideo] = useState<VideoSelection | null>(null);
-  const [caption, setCaption] = useState('');
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
-  const navigation = useNavigation<NavigationProps>();
+  const [useDefaultThumbnail, setUseDefaultThumbnail] = useState(true);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [animation] = useState(new Animated.Value(0));
+  const [uploadState, setUploadState] = useState<UploadState>({
+    sourceLanguage: '',
+    caption: '',
+    targetLanguages: [],
+    translateCaptions: false,
+    deliveryOption: '',
+  });
   const [languageSearch, setLanguageSearch] = useState('');
-  const [translateCaption, setTranslateCaption] = useState(true);
-  const [autoGenerateSubtitles, setAutoGenerateSubtitles] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
+  const navigation = useNavigation<NavigationProps>();
 
-  const loadAccounts = async () => {
-    try {
-      console.log('Loading connected accounts...');
-      const saved = await AsyncStorage.getItem('connectedAccounts');
-      console.log('Saved accounts:', saved);
-      if (saved) {
-        const accounts = JSON.parse(saved);
-        console.log('Parsed accounts:', accounts);
-        setConnectedAccounts(accounts);
-      }
-    } catch (error) {
-      console.error('Error loading accounts:', error);
-    }
-  };
-
-  useFocusEffect(
-    React.useCallback(() => {
-      console.log('Screen focused, loading accounts...');
-      loadAccounts();
-    }, [])
-  );
+  useEffect(() => {
+    Animated.timing(animation, {
+      toValue: useDefaultThumbnail ? 0 : 1,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [useDefaultThumbnail]);
 
   const pickVideo = async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      console.log('Media library permission status:', permission);
       
       if (!permission.granted) {
         Alert.alert(
@@ -268,13 +265,11 @@ export function UploadScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: "videos",
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
         allowsEditing: true,
         quality: 1,
         videoMaxDuration: MAX_DURATION,
       });
-
-      console.log('Image picker result:', result);
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
@@ -311,6 +306,7 @@ export function UploadScreen() {
             size: asset.fileSize || 0,
             thumbnailUri,
           });
+          setUseDefaultThumbnail(true);
         } catch (error) {
           console.error('Error generating thumbnail:', error);
           setSelectedVideo({
@@ -324,108 +320,140 @@ export function UploadScreen() {
       }
     } catch (error) {
       console.error('Error picking video:', error);
+      Alert.alert('Error', 'Failed to select video. Please try again.');
     }
   };
 
-  const handleUpload = async () => {
-    if (!selectedVideo) return;
-    setIsUploading(true);
-    // Upload logic here
-    setIsUploading(false);
+  const pickThumbnail = async () => {
+    if (useDefaultThumbnail) return;
+    
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (!permission.granted) {
+        Alert.alert(
+          "Permission Required",
+          "DubStudio needs access to your media library to upload thumbnails.",
+          [
+            {
+              text: "Open Settings",
+              onPress: () => {
+                Platform.OS === 'ios' 
+                  ? Linking.openURL('app-settings:')
+                  : Linking.openSettings();
+              }
+            },
+            {
+              text: "Cancel",
+              style: "cancel"
+            }
+          ]
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setSelectedVideo(prev => prev ? {
+          ...prev,
+          thumbnailUri: asset.uri
+        } : null);
+      }
+    } catch (error) {
+      console.error('Error picking thumbnail:', error);
+      Alert.alert('Error', 'Failed to select thumbnail. Please try again.');
+    }
   };
 
-  const handleLanguageToggle = (langCode: string) => {
-    setSelectedLanguages(prev => 
-      prev.includes(langCode) 
-        ? prev.filter(code => code !== langCode)
-        : [...prev, langCode]
-    );
-  };
+  const renderVideoPreview = () => {
+    if (!selectedVideo) return null;
 
-  const filteredLanguages = AVAILABLE_LANGUAGES
-    .filter(lang => lang.name.toLowerCase().includes(languageSearch.toLowerCase()))
-    .sort((a, b) => {
-      const aSelected = selectedLanguages.includes(a.code);
-      const bSelected = selectedLanguages.includes(b.code);
-      
-      if (aSelected && !bSelected) return -1;
-      if (!aSelected && bSelected) return 1;
-      
-      return a.name.localeCompare(b.name);
-    });
+    return (
+      <View style={[styles.videoPreviewContainer, {
+        backgroundColor: colors.surface,
+        borderColor: colors.cardBorder
+      }]}>
+        <View style={styles.videoDetails}>
+          <MaterialCommunityIcons name="video" size={24} color={colors.primary} />
+          <View style={styles.videoInfo}>
+            <Text style={[styles.videoName, { color: colors.text }]}>
+              {selectedVideo.name}
+            </Text>
+            <Text style={[styles.videoMetadata, { color: colors.textSecondary }]}>
+              {formatFileSize(selectedVideo.size)} • {Math.round(selectedVideo.duration)}s
+            </Text>
+          </View>
+          <TouchableOpacity onPress={pickVideo}>
+            <MaterialCommunityIcons name="pencil" size={20} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
 
-  const renderLanguageSelector = () => (
-    <View style={[styles.languageSelector, { 
-      backgroundColor: colors.surface,
-      borderColor: colors.cardBorder
-    }]}>
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Select Languages</Text>
-        <View style={styles.subtitlesToggle}>
-          <Text style={[styles.toggleLabel, { color: colors.textSecondary }]}>Auto-generate subtitles</Text>
-          <Switch
-            value={autoGenerateSubtitles}
-            onValueChange={setAutoGenerateSubtitles}
-            trackColor={{ false: isDarkMode ? '#374151' : '#E5E7EB', true: colors.primaryLight }}
-            thumbColor={autoGenerateSubtitles ? colors.primary : (isDarkMode ? '#9CA3AF' : '#6B7280')}
+        {selectedVideo.thumbnailUri && (
+          <Image
+            source={{ uri: selectedVideo.thumbnailUri }}
+            style={styles.videoThumbnail}
+            resizeMode="cover"
           />
+        )}
+
+        <View style={styles.thumbnailOptions}>
+          <View style={styles.thumbnailToggle}>
+            <Text style={[styles.toggleLabel, { color: colors.textSecondary }]}>Use Custom Thumbnail</Text>
+            <Switch
+              value={!useDefaultThumbnail}
+              onValueChange={(value) => {
+                setUseDefaultThumbnail(!value);
+                if (!value && selectedVideo.uri) {
+                  VideoThumbnails.getThumbnailAsync(selectedVideo.uri, {
+                    time: 0,
+                    quality: 0.5,
+                  }).then(({ uri }) => {
+                    setSelectedVideo(prev => prev ? {
+                      ...prev,
+                      thumbnailUri: uri
+                    } : null);
+                  }).catch(error => {
+                    console.error('Error generating default thumbnail:', error);
+                  });
+                }
+              }}
+              trackColor={{ false: isDarkMode ? '#374151' : '#E5E7EB', true: colors.primaryLight }}
+              thumbColor={!useDefaultThumbnail ? colors.primary : (isDarkMode ? '#9CA3AF' : '#6B7280')}
+            />
+          </View>
+
+          <Animated.View style={{
+            maxHeight: animation.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 48]
+            }),
+            opacity: animation,
+            transform: [{
+              translateY: animation.interpolate({
+                inputRange: [0, 1],
+                outputRange: [-10, 0]
+              })
+            }],
+            overflow: 'hidden',
+          }}>
+            <Button
+              title="Upload Custom Thumbnail"
+              onPress={pickThumbnail}
+              variant="primary"
+              leftIcon="image-plus"
+            />
+          </Animated.View>
         </View>
       </View>
-
-      <View style={[styles.searchContainer, { 
-        backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6'
-      }]}>
-        <MaterialCommunityIcons name="magnify" size={20} color={colors.textSecondary} />
-        <TextInput
-          style={[styles.searchInput, { color: colors.text }]}
-          placeholder="Search languages..."
-          placeholderTextColor={colors.textSecondary}
-          value={languageSearch}
-          onChangeText={setLanguageSearch}
-        />
-        {languageSearch ? (
-          <TouchableOpacity
-            style={styles.clearButton}
-            onPress={() => setLanguageSearch('')}
-          >
-            <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
-        ) : null}
-      </View>
-
-      <View style={styles.languageList}>
-        {filteredLanguages.length === 0 ? (
-          <Text style={[styles.noResultsText, { color: colors.textSecondary }]}>
-            No languages found
-          </Text>
-        ) : (
-          filteredLanguages.map((lang) => (
-            <TouchableOpacity
-              key={lang.code}
-              style={[
-                styles.languageItem,
-                selectedLanguages.includes(lang.code) && {
-                  backgroundColor: isDarkMode ? 'rgba(96, 165, 250, 0.1)' : '#EBF5FF',
-                  borderColor: colors.primary
-                }
-              ]}
-              onPress={() => handleLanguageToggle(lang.code)}
-            >
-              <Text style={[
-                styles.languageName,
-                { color: selectedLanguages.includes(lang.code) ? colors.primary : colors.text }
-              ]}>
-                {lang.name}
-              </Text>
-              {selectedLanguages.includes(lang.code) && (
-                <MaterialCommunityIcons name="check" size={20} color={colors.primary} />
-              )}
-            </TouchableOpacity>
-          ))
-        )}
-      </View>
-    </View>
-  );
+    );
+  };
 
   const renderUploadArea = () => (
     <View style={[styles.uploadArea, { 
@@ -438,10 +466,10 @@ export function UploadScreen() {
         color={colors.primary} 
       />
       <Text style={[styles.uploadTitle, { color: colors.text }]}>
-        Drag & Drop or Click to Upload
+        Select a Video to Get Started
       </Text>
       <Text style={[styles.uploadSubtitle, { color: colors.textSecondary }]}>
-        Support for MP4, MOV up to 2GB
+        Upload an MP4 or MOV file (max 90 seconds)
       </Text>
       <Button
         title="Select Video"
@@ -452,96 +480,486 @@ export function UploadScreen() {
     </View>
   );
 
-  const handleConnectFacebook = async () => {
-    setIsLoading(true);
-    try {
-      if (!facebookService.isInitialized()) {
-        facebookService.initialize();
-      }
-
-      const loginResult = await facebookService.login();
-      
-      // Handle user cancellation
-      if (!loginResult || !loginResult.accessToken) {
-        setIsLoading(false);
-        return; // Silently return without showing an error
-      }
-
-      const pages = await facebookService.getPages();
-
-      if (!pages || pages.length === 0) {
-        Alert.alert(
-          'No Facebook Pages Found',
-          'You need to have a Facebook Page to connect Instagram business accounts. Would you like to create one?',
-          [
-            {
-              text: 'Create Page',
-              onPress: () => Linking.openURL('https://www.facebook.com/pages/create'),
-            },
-            { text: 'Cancel', style: 'cancel' },
-          ]
-        );
-        return;
-      }
-
-      const instagramAccounts = await Promise.all(
-        pages.map(async (page) => {
-          try {
-            const instagramAccount = await facebookService.getInstagramBusinessAccount(page.id);
-            return { pageId: page.id, pageName: page.name, instagramAccount };
-          } catch (error) {
-            console.error(`Error fetching Instagram account for page ${page.name}:`, error);
-            return { pageId: page.id, pageName: page.name, instagramAccount: null };
-          }
-        })
-      );
-
-      const connectedAccounts = instagramAccounts.filter(acc => acc.instagramAccount);
-
-      if (connectedAccounts.length === 0) {
-        Alert.alert(
-          'No Instagram Business Accounts',
-          'Would you like to connect an Instagram account to one of your Facebook pages?',
-          [
-            {
-              text: 'Connect Instagram',
-              onPress: () => Linking.openURL('https://business.facebook.com/settings/instagram'),
-            },
-            { text: 'Cancel', style: 'cancel' },
-          ]
-        );
-        return;
-      }
-
-      const updatedAccounts = connectedAccounts.map(acc => ({
-        platform: 'instagram' as const,
-        username: acc.instagramAccount?.username || '',
-        isConnected: true,
-        accessToken: loginResult.accessToken,
-        userId: acc.instagramAccount?.id || '',
-        pageId: acc.pageId,
-        pageName: acc.pageName,
-      }));
-
-      setConnectedAccounts(updatedAccounts);
-      
-      // Store accounts in AsyncStorage for persistence
-      await AsyncStorage.setItem('connectedAccounts', JSON.stringify(updatedAccounts));
-
-      Alert.alert(
-        'Success',
-        `Connected ${updatedAccounts.length} Instagram business account${updatedAccounts.length > 1 ? 's' : ''}.`
-      );
-
-    } catch (error) {
-      console.error('Connection error:', error);
-      // Only show alert for non-cancellation errors
-      if (error instanceof Error && !error.message.includes('cancelled')) {
-        Alert.alert('Error', 'Failed to connect accounts. Please try again.');
-      }
-    } finally {
-      setIsLoading(false);
+  const goToNextStep = () => {
+    if (currentStep < 5) {
+      setCurrentStep(currentStep + 1);
     }
+  };
+
+  const goToPreviousStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const handleSourceLanguageChange = (language: string) => {
+    setUploadState(prev => ({
+      ...prev,
+      sourceLanguage: prev.sourceLanguage === language ? '' : language
+    }));
+  };
+
+  const handleCaptionChange = (text: string) => {
+    if (text.length <= 2200) {
+      setUploadState(prev => ({
+        ...prev,
+        caption: text
+      }));
+    }
+  };
+
+  const handleTargetLanguageChange = (language: string) => {
+    setUploadState(prev => ({
+      ...prev,
+      targetLanguages: prev.targetLanguages.includes(language)
+        ? prev.targetLanguages.filter(lang => lang !== language)
+        : [...prev.targetLanguages, language]
+    }));
+  };
+
+  const filteredSourceLanguages = AVAILABLE_LANGUAGES
+    .filter(lang => lang.name.toLowerCase().includes(languageSearch.toLowerCase()))
+    .sort((a, b) => {
+      if (a.code === uploadState.sourceLanguage) return -1;
+      if (b.code === uploadState.sourceLanguage) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+  const filteredTargetLanguages = AVAILABLE_LANGUAGES
+    .filter(lang => 
+      lang.code !== uploadState.sourceLanguage && 
+      lang.name.toLowerCase().includes(languageSearch.toLowerCase())
+    )
+    .sort((a, b) => {
+      const aSelected = uploadState.targetLanguages.includes(a.code);
+      const bSelected = uploadState.targetLanguages.includes(b.code);
+      if (aSelected && !bSelected) return -1;
+      if (!aSelected && bSelected) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+  const renderStep2 = () => {
+    if (!selectedVideo) return null;
+
+    return (
+      <>
+        <View style={[styles.inputContainer, {
+          backgroundColor: colors.surface,
+          borderColor: colors.cardBorder
+        }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Source Language</Text>
+          
+          <View style={[styles.searchContainer, { 
+            backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6'
+          }]}>
+            <MaterialCommunityIcons name="magnify" size={20} color={colors.textSecondary} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.text }]}
+              placeholder="Search languages..."
+              placeholderTextColor={colors.textSecondary}
+              value={languageSearch}
+              onChangeText={setLanguageSearch}
+            />
+            {languageSearch ? (
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={() => setLanguageSearch('')}
+              >
+                <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.languageScroll}
+          >
+            {filteredSourceLanguages.map((lang) => (
+              <TouchableOpacity
+                key={lang.code}
+                style={[
+                  styles.languageButton,
+                  uploadState.sourceLanguage === lang.code && {
+                    backgroundColor: colors.primary,
+                    borderColor: colors.primary
+                  }
+                ]}
+                onPress={() => handleSourceLanguageChange(lang.code)}
+              >
+                <Text style={[
+                  styles.languageButtonText,
+                  { color: uploadState.sourceLanguage === lang.code ? '#FFFFFF' : colors.text }
+                ]}>
+                  {lang.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        <View style={[styles.inputContainer, {
+          backgroundColor: colors.surface,
+          borderColor: colors.cardBorder
+        }]}>
+          <View style={styles.captionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Caption</Text>
+            <Text style={[styles.characterCount, { color: colors.textSecondary }]}>
+              {uploadState.caption.length}/2200
+            </Text>
+          </View>
+          <TextInput
+            style={[styles.captionInput, { 
+              color: colors.text,
+              backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6'
+            }]}
+            placeholder="Write a caption..."
+            placeholderTextColor={colors.textSecondary}
+            value={uploadState.caption}
+            onChangeText={handleCaptionChange}
+            multiline
+            maxLength={2200}
+            textAlignVertical="top"
+          />
+        </View>
+
+        <View style={styles.footer}>
+          <Button
+            title="Continue"
+            onPress={goToNextStep}
+            variant="primary"
+            disabled={!uploadState.sourceLanguage}
+          />
+        </View>
+      </>
+    );
+  };
+
+  const renderStep3 = () => {
+    if (!selectedVideo) return null;
+
+    return (
+      <>
+        <View style={[styles.inputContainer, {
+          backgroundColor: colors.surface,
+          borderColor: colors.cardBorder
+        }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Target Languages</Text>
+          
+          <View style={[styles.searchContainer, { 
+            backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6'
+          }]}>
+            <MaterialCommunityIcons name="magnify" size={20} color={colors.textSecondary} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.text }]}
+              placeholder="Search languages..."
+              placeholderTextColor={colors.textSecondary}
+              value={languageSearch}
+              onChangeText={setLanguageSearch}
+            />
+            {languageSearch ? (
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={() => setLanguageSearch('')}
+              >
+                <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.languageScroll}
+          >
+            {filteredTargetLanguages.map((lang) => (
+              <TouchableOpacity
+                key={lang.code}
+                style={[
+                  styles.languageButton,
+                  uploadState.targetLanguages.includes(lang.code) && {
+                    backgroundColor: colors.primary,
+                    borderColor: colors.primary
+                  }
+                ]}
+                onPress={() => handleTargetLanguageChange(lang.code)}
+              >
+                <Text style={[
+                  styles.languageButtonText,
+                  { color: uploadState.targetLanguages.includes(lang.code) ? '#FFFFFF' : colors.text }
+                ]}>
+                  {lang.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        <View style={[styles.inputContainer, {
+          backgroundColor: colors.surface,
+          borderColor: colors.cardBorder
+        }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Translation Options</Text>
+          
+          <View style={styles.optionContainer}>
+            <View style={styles.optionRow}>
+              <Text style={[styles.optionText, { color: colors.text }]}>
+                Translate captions to target languages
+              </Text>
+              <Switch
+                value={uploadState.translateCaptions}
+                onValueChange={(value) => setUploadState(prev => ({
+                  ...prev,
+                  translateCaptions: value
+                }))}
+                trackColor={{ false: isDarkMode ? '#374151' : '#E5E7EB', true: colors.primaryLight }}
+                thumbColor={uploadState.translateCaptions ? colors.primary : (isDarkMode ? '#9CA3AF' : '#6B7280')}
+              />
+            </View>
+          </View>
+        </View>
+
+        <View style={[styles.inputContainer, {
+          backgroundColor: colors.surface,
+          borderColor: colors.cardBorder
+        }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Subtitles</Text>
+          <View style={styles.subtitleNote}>
+            <MaterialCommunityIcons name="information" size={20} color={colors.textSecondary} />
+            <Text style={[styles.subtitleNoteText, { color: colors.textSecondary }]}>
+              You'll be able to edit and customize subtitles in the next step
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.footer}>
+          <Button
+            title="Continue"
+            onPress={goToNextStep}
+            variant="primary"
+            disabled={uploadState.targetLanguages.length === 0}
+          />
+        </View>
+      </>
+    );
+  };
+
+  const renderStep4 = () => {
+    if (!selectedVideo) return null;
+
+    return (
+      <>
+        <View style={[styles.inputContainer, {
+          backgroundColor: colors.surface,
+          borderColor: colors.cardBorder
+        }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Delivery Options</Text>
+          
+          <View style={styles.deliveryOptions}>
+            <TouchableOpacity
+              style={[
+                styles.deliveryOption,
+                uploadState.deliveryOption === 'post' && styles.selectedDeliveryOption,
+                {
+                  backgroundColor: colors.cardBackground,
+                  borderColor: uploadState.deliveryOption === 'post' ? colors.primary : colors.border
+                }
+              ]}
+              onPress={() => setUploadState(prev => ({ ...prev, deliveryOption: 'post' }))}
+            >
+              <View style={styles.deliveryIconContainer}>
+                <MaterialCommunityIcons
+                  name="instagram"
+                  size={24}
+                  color={uploadState.deliveryOption === 'post' ? colors.primary : colors.text}
+                />
+              </View>
+              <Text style={[
+                styles.deliveryTitle,
+                { color: uploadState.deliveryOption === 'post' ? colors.primary : colors.text }
+              ]}>
+                Post Now
+              </Text>
+              <Text style={[styles.deliveryDescription, { color: colors.textSecondary }]}>
+                Post directly to Instagram Reels
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.deliveryOption,
+                uploadState.deliveryOption === 'schedule' && styles.selectedDeliveryOption,
+                {
+                  backgroundColor: colors.cardBackground,
+                  borderColor: uploadState.deliveryOption === 'schedule' ? colors.primary : colors.border
+                }
+              ]}
+              onPress={() => setUploadState(prev => ({ ...prev, deliveryOption: 'schedule' }))}
+            >
+              <View style={styles.deliveryIconContainer}>
+                <MaterialCommunityIcons
+                  name="clock-outline"
+                  size={24}
+                  color={uploadState.deliveryOption === 'schedule' ? colors.primary : colors.text}
+                />
+              </View>
+              <Text style={[
+                styles.deliveryTitle,
+                { color: uploadState.deliveryOption === 'schedule' ? colors.primary : colors.text }
+              ]}>
+                Schedule Post
+              </Text>
+              <Text style={[styles.deliveryDescription, { color: colors.textSecondary }]}>
+                Choose when to publish
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.deliveryOption,
+                uploadState.deliveryOption === 'download' && styles.selectedDeliveryOption,
+                {
+                  backgroundColor: colors.cardBackground,
+                  borderColor: uploadState.deliveryOption === 'download' ? colors.primary : colors.border
+                }
+              ]}
+              onPress={() => setUploadState(prev => ({ ...prev, deliveryOption: 'download' }))}
+            >
+              <View style={styles.deliveryIconContainer}>
+                <MaterialCommunityIcons
+                  name="download-outline"
+                  size={24}
+                  color={uploadState.deliveryOption === 'download' ? colors.primary : colors.text}
+                />
+              </View>
+              <Text style={[
+                styles.deliveryTitle,
+                { color: uploadState.deliveryOption === 'download' ? colors.primary : colors.text }
+              ]}>
+                Download Video
+              </Text>
+              <Text style={[styles.deliveryDescription, { color: colors.textSecondary }]}>
+                Save video with translations
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.footer}>
+          <Button
+            title="Continue"
+            onPress={goToNextStep}
+            variant="primary"
+            disabled={!uploadState.deliveryOption}
+          />
+        </View>
+      </>
+    );
+  };
+
+  const renderStep5 = () => {
+    if (!selectedVideo) return null;
+
+    const getLanguageName = (code: string) => {
+      const language = AVAILABLE_LANGUAGES.find(lang => lang.code === code);
+      return language ? language.name : code;
+    };
+
+    return (
+      <>
+        <View style={[styles.inputContainer, {
+          backgroundColor: colors.surface,
+          borderColor: colors.cardBorder
+        }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Review Your Post</Text>
+          
+          <View style={styles.reviewSection}>
+            <View style={styles.reviewItem}>
+              <MaterialCommunityIcons name="video" size={20} color={colors.textSecondary} />
+              <View style={styles.reviewContent}>
+                <Text style={[styles.reviewLabel, { color: colors.textSecondary }]}>Video</Text>
+                <Text style={[styles.reviewValue, { color: colors.text }]}>
+                  {selectedVideo.name} ({Math.round(selectedVideo.duration)}s)
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.reviewItem}>
+              <MaterialCommunityIcons name="translate" size={20} color={colors.textSecondary} />
+              <View style={styles.reviewContent}>
+                <Text style={[styles.reviewLabel, { color: colors.textSecondary }]}>Source Language</Text>
+                <Text style={[styles.reviewValue, { color: colors.text }]}>
+                  {getLanguageName(uploadState.sourceLanguage)}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.reviewItem}>
+              <MaterialCommunityIcons name="translate" size={20} color={colors.textSecondary} />
+              <View style={styles.reviewContent}>
+                <Text style={[styles.reviewLabel, { color: colors.textSecondary }]}>Target Languages</Text>
+                <Text style={[styles.reviewValue, { color: colors.text }]}>
+                  {uploadState.targetLanguages.map(getLanguageName).join(', ')}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.reviewItem}>
+              <MaterialCommunityIcons name="text" size={20} color={colors.textSecondary} />
+              <View style={styles.reviewContent}>
+                <Text style={[styles.reviewLabel, { color: colors.textSecondary }]}>Caption</Text>
+                <Text style={[styles.reviewValue, { color: colors.text }]} numberOfLines={2}>
+                  {uploadState.caption || 'No caption added'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.reviewItem}>
+              <MaterialCommunityIcons 
+                name={uploadState.deliveryOption === 'post' ? 'instagram' : 
+                     uploadState.deliveryOption === 'schedule' ? 'clock-outline' : 'download-outline'} 
+                size={20} 
+                color={colors.textSecondary} 
+              />
+              <View style={styles.reviewContent}>
+                <Text style={[styles.reviewLabel, { color: colors.textSecondary }]}>Delivery</Text>
+                <Text style={[styles.reviewValue, { color: colors.text }]}>
+                  {uploadState.deliveryOption === 'post' ? 'Post Now' :
+                   uploadState.deliveryOption === 'schedule' ? 'Schedule Post' : 'Download Video'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.reviewItem}>
+              <MaterialCommunityIcons name="cog" size={20} color={colors.textSecondary} />
+              <View style={styles.reviewContent}>
+                <Text style={[styles.reviewLabel, { color: colors.textSecondary }]}>Options</Text>
+                <Text style={[styles.reviewValue, { color: colors.text }]}>
+                  {[
+                    uploadState.translateCaptions ? 'Translate captions' : null,
+                    !useDefaultThumbnail ? 'Custom thumbnail' : null
+                  ].filter(Boolean).join(', ') || 'Default settings'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.footer}>
+          <Button
+            title={uploadState.deliveryOption === 'post' ? 'Upload & Post' :
+                  uploadState.deliveryOption === 'schedule' ? 'Schedule Post' : 'Download Video'}
+            onPress={() => {
+              // Handle upload/schedule/download based on deliveryOption
+              console.log('Processing video with settings:', { uploadState, selectedVideo });
+            }}
+            variant="primary"
+            leftIcon={uploadState.deliveryOption === 'post' ? 'upload' :
+                     uploadState.deliveryOption === 'schedule' ? 'clock-outline' : 'download'}
+          />
+        </View>
+      </>
+    );
   };
 
   return (
@@ -549,109 +967,43 @@ export function UploadScreen() {
       <View style={styles.content}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={[styles.title, { color: colors.primary }]}>Upload</Text>
+            <Text style={[styles.title, { color: colors.primary }]}>New Post</Text>
+            <Text style={[styles.stepIndicator, { color: colors.textSecondary }]}>
+              Step {currentStep} of 5
+            </Text>
           </View>
           <View style={styles.headerRight}>
             <TierBadge tier={currentTier} />
           </View>
         </View>
-        
-        {!selectedVideo ? (
-          <View style={styles.centerContainer}>
-            {renderUploadArea()}
-          </View>
-        ) : (
-          <>
-            <ScrollView style={styles.content}>
 
-              {renderUploadArea()}
-
-              {renderLanguageSelector()}
-
-              <View style={[styles.captionContainer, {
-                backgroundColor: colors.surface,
-                borderColor: colors.cardBorder
-              }]}>
-                <View style={styles.captionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}>Caption</Text>
-                  <View style={styles.translateToggle}>
-                    <Text style={[styles.toggleLabel, { color: colors.textSecondary }]}>Translate</Text>
-                    <Switch
-                      value={translateCaption}
-                      onValueChange={setTranslateCaption}
-                      trackColor={{ false: isDarkMode ? '#374151' : '#E5E7EB', true: colors.primaryLight }}
-                      thumbColor={translateCaption ? colors.primary : (isDarkMode ? '#9CA3AF' : '#6B7280')}
-                    />
-                  </View>
+        <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollContainer}>
+          {currentStep === 1 ? (
+            !selectedVideo ? (
+              renderUploadArea()
+            ) : (
+              <>
+                {renderVideoPreview()}
+                <View style={styles.footer}>
+                  <Button
+                    title="Continue"
+                    onPress={goToNextStep}
+                    variant="primary"
+                    disabled={!selectedVideo.thumbnailUri}
+                  />
                 </View>
-                <TextInput
-                  style={[styles.captionInput, { 
-                    color: colors.text,
-                    backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6'
-                  }]}
-                  placeholder="Write a caption..."
-                  placeholderTextColor={colors.textSecondary}
-                  value={caption}
-                  onChangeText={setCaption}
-                  multiline
-                  maxLength={2200}
-                />
-                {translateCaption && (
-                  <View style={[styles.captionHint, { borderTopColor: colors.border }]}>
-                    <MaterialCommunityIcons name="translate" size={16} color={colors.textSecondary} />
-                    <Text style={[styles.hintText, { color: colors.textSecondary }]}>
-                      Your caption will be translated into: {selectedLanguages.length > 0 
-                        ? selectedLanguages.map(code => 
-                            AVAILABLE_LANGUAGES.find(lang => lang.code === code)?.name
-                          ).join(', ')
-                        : 'No languages selected'}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.accountsSection}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Post to Accounts</Text>
-                  <TouchableOpacity onPress={handleConnectFacebook}>
-                    <Text style={styles.addAccountText}>Add Account</Text>
-                  </TouchableOpacity>
-                </View>
-                
-                {connectedAccounts.length > 0 ? (
-                  <View style={styles.accountsList}>
-                    {connectedAccounts.map((account, index) => (
-                      <View key={account.userId || index} style={styles.accountItem}>
-                        <ListItem
-                          accountName={account.username}
-                          subtitle={`Connected via ${account.pageName}`}
-                          status="connected"
-                        />
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <TouchableOpacity 
-                    style={styles.noAccountsButton}
-                    onPress={handleConnectFacebook}
-                  >
-                    <MaterialCommunityIcons name="account-plus" size={24} color="#2171C1" />
-                    <Text style={styles.noAccountsText}>Connect an account to post</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </ScrollView>
-
-            <View style={styles.footer}>
-              <Button
-                title={isUploading ? "Uploading..." : "Upload Video"}
-                onPress={handleUpload}
-                loading={isUploading}
-                disabled={connectedAccounts.length === 0 || selectedLanguages.length === 0}
-              />
-            </View>
-          </>
-        )}
+              </>
+            )
+          ) : currentStep === 2 ? (
+            renderStep2()
+          ) : currentStep === 3 ? (
+            renderStep3()
+          ) : currentStep === 4 ? (
+            renderStep4()
+          ) : currentStep === 5 ? (
+            renderStep5()
+          ) : null}
+        </ScrollView>
       </View>
     </SafeAreaView>
   );
@@ -660,23 +1012,21 @@ export function UploadScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   content: {
     flex: 1,
-    paddingTop: 16,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    paddingBottom: 8,
+    borderBottomWidth: 1,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   headerRight: {
     flexDirection: 'row',
@@ -686,224 +1036,28 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#2171C1',
   },
-  centerContainer: {
+  stepIndicator: {
+    fontSize: 14,
+  },
+  scrollContent: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  },
+  scrollContainer: {
     padding: 16,
+    minHeight: '100%',
   },
   uploadArea: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    padding: 32,
+    borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
     borderStyle: 'dashed',
-    minHeight: 200,
-    width: '100%',
-    maxWidth: 400,
-  },
-  thumbnail: {
-    width: '100%',
-    height: 200,
-    borderRadius: 16,
-    marginBottom: 12,
-  },
-  placeholderThumbnail: {
-    width: '100%',
-    height: 200,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  uploadText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#374151',
-    marginTop: 12,
-  },
-  uploadSubtext: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  videoName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1F2937',
-  },
-  videoDetails: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  changeButton: {
-    marginTop: 12,
-    padding: 8,
-  },
-  changeButtonText: {
-    color: '#2171C1',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  captionContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-  },
-  captionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  captionInput: {
-    fontSize: 16,
-    color: '#1F2937',
-    minHeight: 100,
-    textAlignVertical: 'top',
-    padding: 0,
-  },
-  accountsSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  addAccountText: {
-    color: '#2171C1',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  accountsList: {
-    gap: 12,
-  },
-  accountItem: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  noAccountsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    gap: 8,
-  },
-  noAccountsText: {
-    color: '#2171C1',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  footer: {
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  languageSelector: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  languageList: {
-    paddingVertical: 8,
-    gap: 8,
-  },
-  languageItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginRight: 8,
-  },
-  languageName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#1F2937',
-    paddingHorizontal: 8,
-    paddingVertical: 0,
-    height: 20,
-  },
-  clearButton: {
-    padding: 2,
-  },
-  noResultsText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontStyle: 'italic',
-    paddingVertical: 8,
-  },
-  captionHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    gap: 6,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  hintText: {
-    fontSize: 13,
-    color: '#6B7280',
-    flex: 1,
-  },
-  translateToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  toggleLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  subtitlesToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    marginVertical: 32,
   },
   uploadTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     marginTop: 16,
     marginBottom: 8,
@@ -911,5 +1065,182 @@ const styles = StyleSheet.create({
   uploadSubtitle: {
     fontSize: 14,
     marginBottom: 24,
+  },
+  videoPreviewContainer: {
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  videoDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  videoInfo: {
+    flex: 1,
+  },
+  videoName: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  videoMetadata: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  videoThumbnail: {
+    width: '100%',
+    height: 200,
+    backgroundColor: '#F3F4F6',
+  },
+  thumbnailOptions: {
+    padding: 16,
+    gap: 16,
+  },
+  thumbnailToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  toggleLabel: {
+    fontSize: 14,
+  },
+  footer: {
+    marginTop: 24,
+  },
+  previewContainer: {
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  previewThumbnail: {
+    width: '100%',
+    height: 200,
+    backgroundColor: '#F3F4F6',
+  },
+  inputContainer: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  languageScroll: {
+    marginHorizontal: -8,
+    flexGrow: 0,
+  },
+  languageButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 2,
+    borderRadius: 8,
+    marginHorizontal: 4,
+  },
+  languageButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  captionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  characterCount: {
+    fontSize: 12,
+  },
+  captionInput: {
+    minHeight: 120,
+    padding: 12,
+    borderRadius: 8,
+    textAlignVertical: 'top',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    marginLeft: 8,
+    padding: 0,
+  },
+  clearButton: {
+    padding: 4,
+  },
+  optionContainer: {
+    gap: 16,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  optionText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    marginRight: 12,
+  },
+  subtitleNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  subtitleNoteText: {
+    flex: 1,
+    fontSize: 14,
+  },
+  deliveryOptions: {
+    gap: 12,
+  },
+  deliveryOption: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 16,
+  },
+  selectedDeliveryOption: {
+    borderWidth: 2,
+  },
+  deliveryIconContainer: {
+    marginBottom: 12,
+  },
+  deliveryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  deliveryDescription: {
+    fontSize: 14,
+  },
+  reviewSection: {
+    gap: 16,
+  },
+  reviewItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  reviewContent: {
+    flex: 1,
+  },
+  reviewLabel: {
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  reviewValue: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 }); 

@@ -1,52 +1,65 @@
+upload functionalitty linked with the button:
+---------------------------------------------------------------------------------------
+1. **Required API Endpoints** (from infrastructure stack):
+   - Upload endpoint: Generates pre-signed S3 URL
+   - Process endpoint: Starts dubbing process
+   - Status endpoint: Checks processing status
 
-The OAuth flow will work for multiple accounts. Here's how it works with your language-specific accounts:
+2. **Data We Have in UploadScreen.tsx**:
+   - `selectedVideo`: Video file details (uri, name, type, size)
+   - `selectedLanguages`: Array of language codes
+   - `caption`: User's caption text
+   - `translateCaption`: Boolean for caption translation
+   - `autoGenerateSubtitles`: Boolean for subtitle generation
+   - `thumbnail`: User's thumbnail image
+3. **Flow Steps Needed**:
 
-1. **User Flow Example**:
-```
-For Spanish video:
-- Click "Connect Account" for Spanish
-- OAuth into test.spanish
-- Account gets stored with language context "es"
+   a. **Pre-upload Validation**:
+   - Check video exists
+   - Verify selected languages
+   - Validate file size/format again
+   - Check user's tier limits
 
-For French video:
-- Click "Connect Account" for French
-- OAuth into test.french
-- Account gets stored with language context "fr"
+   b. **Get Upload URL**:
+   - Call upload Lambda endpoint
+   - Receive:
+     - Pre-signed S3 URL
+     - videoId
+     - S3 key
 
-For Danish video:
-- Click "Connect Account" for Danish
-- OAuth into test.danish
-- Account gets stored with language context "da"
-```
+   c. **Upload to S3**:
+   - Convert video URI to blob
+   - Upload to pre-signed URL
+   - Show progress using XMLHttpRequest or fetch
+   - Handle upload errors
 
-Your existing code already supports this with:
-```typescript
-interface ConnectedAccount {
-  platform: 'instagram';
-  username: string;
-  language?: string;  // Stores which language this account is for
-  isConnected: boolean;
-  accessToken?: string;
-  userId?: string;
-}
-```
+   d. **Start Processing**:
+   - Call process endpoint with:
+     - videoId
+     - selectedLanguages
+     - caption (if provided)
+     - translation preferences
+     - subtitle preferences
 
-When processing videos, your app will:
-1. Know which account to use for each language
-2. Have separate access tokens for each account
-3. Be able to post to the correct account for each language version
+   e. **Handle Response**:
+   - Show success message
+   - Navigate to status/analytics screen
+   - Or handle errors appropriately
 
-The key is that each OAuth flow:
-1. Stores which language it's for (using `pendingLanguageCode`)
-2. Gets its own unique access token
-3. Is associated with the specific language in your `connectedAccounts` state
+4. **Error Handling Needed**:
+   - Network errors
+   - Upload failures
+   - API errors
+   - S3 errors
+   - Progress tracking
+   - Timeout handling
 
-Would you like me to:
-1. Show you how to implement the account storage for multiple accounts?
-2. Add validation to ensure accounts aren't connected twice?
-3. Implement something else?
-
-
+5. **UI Considerations**:
+   - Progress indicator
+   - Cancel upload option
+   - Error messages
+   - Success feedback
+   - Loading states
 
 ---------------------------------------------------------------------------------------
 Here's a comprehensive checklist for implementing Instagram posting functionality, based on your existing code and requirements:
