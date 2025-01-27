@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TierBadge } from '../components/TierBadge';
 import { useTier } from '../contexts/TierContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface OverallMetrics {
   totalFollowers: number;
@@ -55,6 +56,7 @@ const { width } = Dimensions.get('window');
 
 export function AnalyticsScreen() {
   const { currentTier } = useTier();
+  const { colors, isDarkMode } = useTheme();
   const [currentPage, setCurrentPage] = useState(1);
   const flatListRef = useRef<FlatList>(null);
 
@@ -74,13 +76,22 @@ export function AnalyticsScreen() {
     change: number,
     icon: keyof typeof MaterialCommunityIcons.glyphMap
   ) => (
-    <View style={styles.metricCard}>
+    <View style={[styles.metricCard, { 
+      backgroundColor: colors.cardBackground,
+      borderColor: colors.cardBorder
+    }]}>
       <View style={styles.metricHeader}>
-        <MaterialCommunityIcons name={icon} size={24} color="#2171C1" />
-        <Text style={styles.metricTitle}>{title}</Text>
+        <MaterialCommunityIcons name={icon} size={24} color={colors.primary} />
+        <Text style={[styles.metricTitle, { color: colors.textSecondary }]}>{title}</Text>
       </View>
-      <Text style={styles.metricValue}>{value}</Text>
-      <View style={[styles.changeIndicator, { backgroundColor: change >= 0 ? '#DCFCE7' : '#FEE2E2' }]}>
+      <Text style={[styles.metricValue, { color: colors.text }]}>{value}</Text>
+      <View style={[
+        styles.changeIndicator, 
+        { backgroundColor: change >= 0 ? 
+          (isDarkMode ? 'rgba(22, 163, 74, 0.2)' : '#DCFCE7') : 
+          (isDarkMode ? 'rgba(220, 38, 38, 0.2)' : '#FEE2E2') 
+        }
+      ]}>
         <MaterialCommunityIcons
           name={change >= 0 ? 'trending-up' : 'trending-down'}
           size={16}
@@ -94,37 +105,46 @@ export function AnalyticsScreen() {
   );
 
   const renderAccountCard = ({ item: account }: { item: AccountMetrics }) => (
-    <View style={styles.accountCard}>
+    <View style={[styles.accountCard, {
+      backgroundColor: colors.cardBackground,
+      borderColor: colors.cardBorder
+    }]}>
       <View style={styles.accountHeader}>
-        <Text style={styles.accountName}>@{account.username}</Text>
+        <Text style={[styles.accountName, { color: colors.text }]}>@{account.username}</Text>
       </View>
       <View style={styles.accountMetrics}>
         <View style={styles.accountMetric}>
-          <Text style={styles.metricLabel}>Followers</Text>
-          <Text style={styles.metricValue}>{formatNumber(account.followers)}</Text>
-          <View style={[styles.changeIndicator, { backgroundColor: '#DCFCE7' }]}>
+          <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Followers</Text>
+          <Text style={[styles.metricValue, { color: colors.text }]}>{formatNumber(account.followers)}</Text>
+          <View style={[styles.changeIndicator, { 
+            backgroundColor: isDarkMode ? 'rgba(22, 163, 74, 0.2)' : '#DCFCE7'
+          }]}>
             <MaterialCommunityIcons name="trending-up" size={14} color="#16A34A" />
             <Text style={[styles.changeText, { color: '#16A34A' }]}>
               +{account.growth}
             </Text>
           </View>
         </View>
-        <View style={styles.metricDivider} />
+        <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
         <View style={styles.accountMetric}>
-          <Text style={styles.metricLabel}>Engagement</Text>
-          <Text style={styles.metricValue}>{account.engagement}%</Text>
-          <View style={[styles.changeIndicator, { backgroundColor: '#DCFCE7' }]}>
+          <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Engagement</Text>
+          <Text style={[styles.metricValue, { color: colors.text }]}>{account.engagement}%</Text>
+          <View style={[styles.changeIndicator, { 
+            backgroundColor: isDarkMode ? 'rgba(22, 163, 74, 0.2)' : '#DCFCE7'
+          }]}>
             <MaterialCommunityIcons name="trending-up" size={14} color="#16A34A" />
             <Text style={[styles.changeText, { color: '#16A34A' }]}>
               +2.1%
             </Text>
           </View>
         </View>
-        <View style={styles.metricDivider} />
+        <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
         <View style={styles.accountMetric}>
-          <Text style={styles.metricLabel}>Reach Rate</Text>
-          <Text style={styles.metricValue}>{account.reachRate}%</Text>
-          <View style={[styles.changeIndicator, { backgroundColor: '#DCFCE7' }]}>
+          <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Reach Rate</Text>
+          <Text style={[styles.metricValue, { color: colors.text }]}>{account.reachRate}%</Text>
+          <View style={[styles.changeIndicator, { 
+            backgroundColor: isDarkMode ? 'rgba(22, 163, 74, 0.2)' : '#DCFCE7'
+          }]}>
             <MaterialCommunityIcons name="trending-up" size={14} color="#16A34A" />
             <Text style={[styles.changeText, { color: '#16A34A' }]}>
               +4.3%
@@ -141,19 +161,22 @@ export function AnalyticsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.content}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.title}>Analytics</Text>
+            <Text style={[styles.title, { color: colors.primary }]}>Analytics</Text>
           </View>
           <View style={styles.headerRight}>
             <TierBadge tier={currentTier} />
           </View>
         </View>
 
-        <View style={styles.overallMetrics}>
-          <Text style={styles.sectionTitle}>Overall Performance</Text>
+        <View style={[styles.overallMetrics, { 
+          backgroundColor: colors.surface,
+          borderColor: colors.cardBorder
+        }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Overall Performance</Text>
           <View style={styles.metricsContainer}>
             {renderMetricCard(
               'Total Followers',
@@ -182,14 +205,19 @@ export function AnalyticsScreen() {
           </View>
         </View>
 
-        <View style={styles.accountsSection}>
-          <Text style={styles.sectionTitle}>Account Analytics</Text>
+        <View style={[styles.accountsSection, { 
+          backgroundColor: colors.surface,
+          borderColor: colors.cardBorder
+        }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Account Analytics</Text>
           <ScrollView 
             style={styles.accountsScrollView}
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.accountsHeader}>
-              <Text style={styles.pageIndicator}>{currentPage}/{mockAccounts.length}</Text>
+              <Text style={[styles.pageIndicator, { color: colors.textSecondary }]}>
+                {currentPage}/{mockAccounts.length}
+              </Text>
             </View>
             <FlatList
               ref={flatListRef}

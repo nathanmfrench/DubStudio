@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useTier } from '../contexts/TierContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface VideoSelection {
   uri: string;
@@ -204,6 +205,7 @@ type NavigationProps = NativeStackNavigationProp<any>;
 
 export function UploadScreen() {
   const { currentTier } = useTier();
+  const { colors, isDarkMode } = useTheme();
   const [selectedVideo, setSelectedVideo] = useState<VideoSelection | null>(null);
   const [caption, setCaption] = useState('');
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
@@ -353,99 +355,101 @@ export function UploadScreen() {
     });
 
   const renderLanguageSelector = () => (
-    <View style={styles.languageSection}>
+    <View style={[styles.languageSelector, { 
+      backgroundColor: colors.surface,
+      borderColor: colors.cardBorder
+    }]}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Target Languages</Text>
-        <Text style={styles.languageCount}>
-          {selectedLanguages.length} selected
-        </Text>
-      </View>
-      
-      <View style={styles.searchContainer}>
-        <MaterialCommunityIcons name="magnify" size={16} color="#6B7280" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search languages..."
-          value={languageSearch}
-          onChangeText={setLanguageSearch}
-          placeholderTextColor="#9CA3AF"
-        />
-        {languageSearch !== '' && (
-          <TouchableOpacity 
-            onPress={() => setLanguageSearch('')}
-            style={styles.clearButton}
-          >
-            <MaterialCommunityIcons name="close-circle" size={16} color="#6B7280" />
-          </TouchableOpacity>
-        )}
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Select Languages</Text>
+        <View style={styles.subtitlesToggle}>
+          <Text style={[styles.toggleLabel, { color: colors.textSecondary }]}>Auto-generate subtitles</Text>
+          <Switch
+            value={autoGenerateSubtitles}
+            onValueChange={setAutoGenerateSubtitles}
+            trackColor={{ false: isDarkMode ? '#374151' : '#E5E7EB', true: colors.primaryLight }}
+            thumbColor={autoGenerateSubtitles ? colors.primary : (isDarkMode ? '#9CA3AF' : '#6B7280')}
+          />
+        </View>
       </View>
 
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.languageList}
-      >
-        {filteredLanguages.map(lang => (
+      <View style={[styles.searchContainer, { 
+        backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6'
+      }]}>
+        <MaterialCommunityIcons name="magnify" size={20} color={colors.textSecondary} />
+        <TextInput
+          style={[styles.searchInput, { color: colors.text }]}
+          placeholder="Search languages..."
+          placeholderTextColor={colors.textSecondary}
+          value={languageSearch}
+          onChangeText={setLanguageSearch}
+        />
+        {languageSearch ? (
           <TouchableOpacity
-            key={lang.code}
-            style={[
-              styles.languageChip,
-              selectedLanguages.includes(lang.code) && styles.languageChipSelected
-            ]}
-            onPress={() => handleLanguageToggle(lang.code)}
+            style={styles.clearButton}
+            onPress={() => setLanguageSearch('')}
           >
-            <Text style={[
-              styles.languageChipText,
-              selectedLanguages.includes(lang.code) && styles.languageChipTextSelected
-            ]}>
-              {lang.name}
-            </Text>
+            <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
-        ))}
-        {filteredLanguages.length === 0 && (
-          <Text style={styles.noResultsText}>No languages found</Text>
+        ) : null}
+      </View>
+
+      <View style={styles.languageList}>
+        {filteredLanguages.length === 0 ? (
+          <Text style={[styles.noResultsText, { color: colors.textSecondary }]}>
+            No languages found
+          </Text>
+        ) : (
+          filteredLanguages.map((lang) => (
+            <TouchableOpacity
+              key={lang.code}
+              style={[
+                styles.languageItem,
+                selectedLanguages.includes(lang.code) && {
+                  backgroundColor: isDarkMode ? 'rgba(96, 165, 250, 0.1)' : '#EBF5FF',
+                  borderColor: colors.primary
+                }
+              ]}
+              onPress={() => handleLanguageToggle(lang.code)}
+            >
+              <Text style={[
+                styles.languageName,
+                { color: selectedLanguages.includes(lang.code) ? colors.primary : colors.text }
+              ]}>
+                {lang.name}
+              </Text>
+              {selectedLanguages.includes(lang.code) && (
+                <MaterialCommunityIcons name="check" size={20} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+          ))
         )}
-      </ScrollView>
+      </View>
     </View>
   );
 
   const renderUploadArea = () => (
-    <TouchableOpacity 
-      style={styles.uploadArea} 
-      onPress={pickVideo}
-      activeOpacity={0.7}
-    >
-      {selectedVideo ? (
-        <>
-          {selectedVideo.thumbnailUri ? (
-            <Image
-              source={{ uri: selectedVideo.thumbnailUri }}
-              style={styles.thumbnail}
-            />
-          ) : (
-            <View style={styles.placeholderThumbnail}>
-              <MaterialCommunityIcons name="video" size={48} color="#2171C1" />
-            </View>
-          )}
-          <Text style={styles.videoName}>{selectedVideo.name}</Text>
-          <Text style={styles.videoDetails}>
-            {Math.round(selectedVideo.duration)}s • {formatFileSize(selectedVideo.size)}
-          </Text>
-          <TouchableOpacity
-            style={styles.changeButton}
-            onPress={pickVideo}
-          >
-            <Text style={styles.changeButtonText}>Change Video</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        <>
-          <MaterialCommunityIcons name="cloud-upload" size={48} color="#2171C1" />
-          <Text style={styles.uploadText}>Tap to select a video</Text>
-          <Text style={styles.uploadSubtext}>MP4 format, max {MAX_DURATION} seconds</Text>
-        </>
-      )}
-    </TouchableOpacity>
+    <View style={[styles.uploadArea, { 
+      backgroundColor: colors.surface,
+      borderColor: colors.border
+    }]}>
+      <MaterialCommunityIcons 
+        name="cloud-upload-outline" 
+        size={48} 
+        color={colors.primary} 
+      />
+      <Text style={[styles.uploadTitle, { color: colors.text }]}>
+        Drag & Drop or Click to Upload
+      </Text>
+      <Text style={[styles.uploadSubtitle, { color: colors.textSecondary }]}>
+        Support for MP4, MOV up to 2GB
+      </Text>
+      <Button
+        title="Select Video"
+        onPress={pickVideo}
+        variant="primary"
+        leftIcon="video-plus"
+      />
+    </View>
   );
 
   const handleConnectFacebook = async () => {
@@ -541,11 +545,11 @@ export function UploadScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.content}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.title}>Upload</Text>
+            <Text style={[styles.title, { color: colors.primary }]}>Upload</Text>
           </View>
           <View style={styles.headerRight}>
             <TierBadge tier={currentTier} />
@@ -564,31 +568,38 @@ export function UploadScreen() {
 
               {renderLanguageSelector()}
 
-              <View style={styles.captionContainer}>
+              <View style={[styles.captionContainer, {
+                backgroundColor: colors.surface,
+                borderColor: colors.cardBorder
+              }]}>
                 <View style={styles.captionHeader}>
-                  <Text style={styles.sectionTitle}>Caption</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>Caption</Text>
                   <View style={styles.translateToggle}>
-                    <Text style={styles.toggleLabel}>Translate</Text>
+                    <Text style={[styles.toggleLabel, { color: colors.textSecondary }]}>Translate</Text>
                     <Switch
                       value={translateCaption}
                       onValueChange={setTranslateCaption}
-                      trackColor={{ false: '#E5E7EB', true: '#93C5FD' }}
-                      thumbColor={translateCaption ? '#2171C1' : '#9CA3AF'}
+                      trackColor={{ false: isDarkMode ? '#374151' : '#E5E7EB', true: colors.primaryLight }}
+                      thumbColor={translateCaption ? colors.primary : (isDarkMode ? '#9CA3AF' : '#6B7280')}
                     />
                   </View>
                 </View>
                 <TextInput
-                  style={styles.captionInput}
+                  style={[styles.captionInput, { 
+                    color: colors.text,
+                    backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6'
+                  }]}
                   placeholder="Write a caption..."
+                  placeholderTextColor={colors.textSecondary}
                   value={caption}
                   onChangeText={setCaption}
                   multiline
                   maxLength={2200}
                 />
                 {translateCaption && (
-                  <View style={styles.captionHint}>
-                    <MaterialCommunityIcons name="translate" size={16} color="#6B7280" />
-                    <Text style={styles.hintText}>
+                  <View style={[styles.captionHint, { borderTopColor: colors.border }]}>
+                    <MaterialCommunityIcons name="translate" size={16} color={colors.textSecondary} />
+                    <Text style={[styles.hintText, { color: colors.textSecondary }]}>
                       Your caption will be translated into: {selectedLanguages.length > 0 
                         ? selectedLanguages.map(code => 
                             AVAILABLE_LANGUAGES.find(lang => lang.code === code)?.name
@@ -597,29 +608,6 @@ export function UploadScreen() {
                     </Text>
                   </View>
                 )}
-              </View>
-
-              <View style={styles.subtitlesContainer}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Subtitles</Text>
-                  <View style={styles.translateToggle}>
-                    <Text style={styles.toggleLabel}>Auto-Generate</Text>
-                    <Switch
-                      value={autoGenerateSubtitles}
-                      onValueChange={setAutoGenerateSubtitles}
-                      trackColor={{ false: '#E5E7EB', true: '#93C5FD' }}
-                      thumbColor={autoGenerateSubtitles ? '#2171C1' : '#9CA3AF'}
-                    />
-                  </View>
-                </View>
-                
-                <View style={styles.subtitlesButtonContainer}>
-                  <Button
-                    title="Subtitle Editor"
-                    onPress={() => console.log('clicked subtitle editor button')}
-                    variant="secondary"
-                  />
-                </View>
               </View>
 
               <View style={styles.accountsSection}>
@@ -834,37 +822,30 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
   },
-  languageSection: {
+  languageSelector: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   languageList: {
     paddingVertical: 8,
     gap: 8,
   },
-  languageChip: {
+  languageItem: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     marginRight: 8,
   },
-  languageChipSelected: {
-    backgroundColor: '#2171C1',
-  },
-  languageChipText: {
+  languageName: {
     fontSize: 14,
-    color: '#374151',
     fontWeight: '500',
-  },
-  languageChipTextSelected: {
-    color: '#FFFFFF',
-  },
-  languageCount: {
-    fontSize: 14,
-    color: '#6B7280',
+    color: '#374151',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -916,14 +897,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
   },
-  subtitlesContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
+  subtitlesToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  subtitlesButtonContainer: {
-    gap: 12,
-    marginTop: 12,
+  uploadTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  uploadSubtitle: {
+    fontSize: 14,
+    marginBottom: 24,
   },
 }); 
