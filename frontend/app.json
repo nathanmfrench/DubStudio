@@ -2,6 +2,37 @@
   "expo": {
     "name": "DubStudio",
     "slug": "dubstudio",
-    "owner": "nfrench17"
+    "owner": "nfrench17",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/app-icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./src/assets/app-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1F1F1F"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.voxium.dubstudio"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/app-icon.png",
+        "backgroundColor": "#1F1F1F"
+      },
+      "package": "com.voxium.dubstudio"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "enabled": true
+        }
+      ]
+    ]
   }
 }

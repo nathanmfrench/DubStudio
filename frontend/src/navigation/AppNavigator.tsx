@@ -59,6 +59,14 @@ export function AppNavigator() {
       ) : (
         <Stack.Screen name="Main" component={TabNavigator} />
       )}
+      <Stack.Screen
+        name="Accounts"
+        component={AccountsScreen}
+        options={{
+          title: 'Manage Accounts',
+          headerShown: true,
+        }}
+      />
     </Stack.Navigator>
   );
 } 

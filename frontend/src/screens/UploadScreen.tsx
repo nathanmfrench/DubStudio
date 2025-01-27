@@ -1,20 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Image, Dimensions, Alert, TextInput, TouchableOpacity, ScrollView, Platform, Animated, Easing, Linking } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Platform, Alert, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ListItem } from '../components/ListItem';
-import { Modal } from '../components/Modal';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path } from 'react-native-svg';
-import { fetchAuthSession } from 'aws-amplify/auth';
-import { apiEndpoints } from '../config/aws-config';
-import { config } from '../config/env';
-import { useFocusEffect } from '@react-navigation/native';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { facebookService } from '../services/FacebookService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 interface VideoSelection {
   uri: string;
@@ -38,6 +33,8 @@ interface ConnectedAccount {
   isConnected: boolean;
   accessToken?: string;
   userId?: string;
+  pageId?: string;
+  pageName?: string;
 }
 
 interface AccountMetrics {
@@ -153,21 +150,6 @@ const DUMMY_METRICS: AccountMetrics = {
   postsThisWeek: 5,
 };
 
-const CurvedPath = () => (
-  <Svg
-    width={width * 0.8}
-    height={width * 0.8}
-    style={styles.curvedPath}
-  >
-    <Path
-      d={`M0 ${width * 0.4} Q ${width * 0.4} ${width * 0.3} ${width * 0.8} ${width * 0.4}`}
-      fill="none"
-      stroke="#E5E7EB"
-      strokeWidth="1"
-    />
-  </Svg>
-);
-
 const SUPPORTED_VIDEO_FORMATS = ['mp4', 'mov', 'hevc'];
 
 const validateVideoFormat = async (uri: string): Promise<boolean> => {
@@ -208,86 +190,52 @@ const validateVideoFormat = async (uri: string): Promise<boolean> => {
   }
 };
 
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+};
+
+type NavigationProps = NativeStackNavigationProp<any>;
+
 export function UploadScreen() {
   const [selectedVideo, setSelectedVideo] = useState<VideoSelection | null>(null);
-  const [captionDetails, setCaptionDetails] = useState<CaptionDetails>({
-    caption: '',
-    targetLanguages: [],
-    id: `VID_${Date.now()}`
-  });
-  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([
-    { platform: 'instagram', username: '@username', isConnected: false }
-  ]);
-  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [caption, setCaption] = useState('');
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [processingStatus, setProcessingStatus] = useState<ProcessingStatus | null>(null);
-  const [statusModalVisible, setStatusModalVisible] = useState(false);
-  const [startTime] = useState(Date.now());
-  const [showCelebration, setShowCelebration] = useState(false);
-  const successScaleAnim = useRef(new Animated.Value(0)).current;
-  const successOpacityAnim = useRef(new Animated.Value(0)).current;
-  const [showAccountCreationModal, setShowAccountCreationModal] = useState(false);
-  const [accountCreationDetails, setAccountCreationDetails] = useState<AccountCreationDetails | null>(null);
+  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
+  const navigation = useNavigation<NavigationProps>();
+  const [languageSearch, setLanguageSearch] = useState('');
 
-  useEffect(() => {
-    if (showCelebration) {
-      Animated.sequence([
-        Animated.parallel([
-          Animated.spring(successScaleAnim, {
-            toValue: 1,
-            useNativeDriver: true,
-            tension: 50,
-            friction: 7,
-          }),
-          Animated.timing(successOpacityAnim, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-        ]),
-      ]).start();
-
-      return () => {
-        successScaleAnim.setValue(0);
-        successOpacityAnim.setValue(0);
-      };
+  const loadAccounts = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('connectedAccounts');
+      if (saved) {
+        setConnectedAccounts(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error('Error loading accounts:', error);
     }
-  }, [showCelebration]);
+  };
 
-  // Add focus effect to reset state when screen is focused
   useFocusEffect(
     React.useCallback(() => {
-      // Reset all state to initial values
-      resetState();
-      setStatusModalVisible(false);
-      setShowCelebration(false);
-      setError(null);
-      setUploadProgress(0);
-      setProcessingStatus(null);
-      
-      // Return cleanup function
-      return () => {
-        // Optional: Any cleanup needed when screen loses focus
-      };
-    }, []) // Empty dependency array since we want this to run every time the screen is focused
+      loadAccounts();
+    }, [])
   );
-
-  const handleBack = () => {
-    setSelectedVideo(null);
-  };
 
   const pickVideo = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (permission.granted) {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['videos'],
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
         allowsEditing: true,
         quality: 1,
         videoMaxDuration: MAX_DURATION,
-        exif: true,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -297,8 +245,7 @@ export function UploadScreen() {
         if (durationInSeconds > MAX_DURATION) {
           Alert.alert(
             "Video Too Long",
-            `Videos must be ${MAX_DURATION} seconds or less for Instagram Reels. This video is ${Math.round(durationInSeconds)} seconds.`,
-            [{ text: "OK" }]
+            `Videos must be ${MAX_DURATION} seconds or less for Instagram Reels. This video is ${Math.round(durationInSeconds)} seconds.`
           );
           return;
         }
@@ -307,45 +254,32 @@ export function UploadScreen() {
         if (!isValidFormat) {
           Alert.alert(
             "Unsupported Format",
-            "Please select a video in MP4 format (H.264 or HEVC codec).",
-            [{ text: "OK" }]
+            "Please select a video in MP4 format (H.264 or HEVC codec)."
           );
           return;
         }
 
         try {
-          // Generate thumbnail from the first frame
           const { uri: thumbnailUri } = await VideoThumbnails.getThumbnailAsync(asset.uri, {
             time: 0,
             quality: 0.5,
           });
 
-          // Get the actual MIME type from the blob
-          const response = await fetch(asset.uri);
-          const blob = await response.blob();
-          const mimeType = blob.type || 'video/mp4';
-
           setSelectedVideo({
-            name: asset.fileName || 'Untitled',
+            name: asset.fileName || 'video',
             uri: asset.uri,
             duration: durationInSeconds,
-            type: mimeType,
+            type: 'video/mp4',
             size: asset.fileSize || 0,
             thumbnailUri,
           });
         } catch (error) {
           console.error('Error generating thumbnail:', error);
-          // Get the MIME type even if thumbnail generation fails
-          const response = await fetch(asset.uri);
-          const blob = await response.blob();
-          const mimeType = blob.type || 'video/mp4';
-          
-          // Continue without thumbnail if generation fails
           setSelectedVideo({
-            name: asset.fileName || 'Untitled',
+            name: asset.fileName || 'video',
             uri: asset.uri,
             duration: durationInSeconds,
-            type: mimeType,
+            type: 'video/mp4',
             size: asset.fileSize || 0,
           });
         }
@@ -353,1370 +287,419 @@ export function UploadScreen() {
     }
   };
 
-  const formatDuration = (seconds: number): string => {
-    const minutes = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${minutes}m ${secs}s`;
+  const handleUpload = async () => {
+    if (!selectedVideo) return;
+    setIsUploading(true);
+    // Upload logic here
+    setIsUploading(false);
   };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-  };
-
-  const toggleLanguage = (code: string) => {
-    setCaptionDetails(prev => {
-      const languages = prev.targetLanguages.includes(code)
-        ? prev.targetLanguages.filter(lang => lang !== code)
-        : [...prev.targetLanguages, code];
-      return { ...prev, targetLanguages: languages };
-    });
-  };
-
-  const handleConnectAccounts = async () => {
-    try {
-      // Initialize Facebook SDK if not already initialized
-      if (!facebookService.isInitialized()) {
-        facebookService.initialize();
-      }
-
-      // Attempt Facebook login
-      const loginResult = await facebookService.login();
-      console.log('Facebook login successful:', loginResult);
-
-      // Get user profile after successful login
-      const profile = await facebookService.getUserProfile();
-      console.log('Facebook profile:', profile);
-
-      // Get user's Facebook pages
-      const pages = await facebookService.getPages();
-      console.log('Facebook pages:', pages);
-
-      // You might want to store this information or update UI
-      // For now, we'll just show a success message
-      Alert.alert('Success', 'Facebook account connected successfully!');
-
-    } catch (error) {
-      console.error('Facebook connection error:', error);
-      Alert.alert('Error', 'Failed to connect Facebook account. Please try again.');
-    }
-  };
-
-  const getRecommendedUsername = (language: string) => {
-    const baseUsername = 'nathanfrench';
-    const suffix = LANGUAGE_SUFFIXES[language as keyof typeof LANGUAGE_SUFFIXES];
-    return `${baseUsername}.${suffix}`;
-  };
-
-  const handleAccountPress = (accountName: string) => {
-    setSelectedAccount(accountName);
-  };
-
-  const renderMetricItem = (label: string, value: string | number, icon: keyof typeof MaterialCommunityIcons.glyphMap) => (
-    <View style={styles.metricItem}>
-      <MaterialCommunityIcons name={icon} size={24} color="#2171C1" style={styles.metricIcon} />
-      <View>
-        <Text style={styles.metricValue}>{value}</Text>
-        <Text style={styles.metricLabel}>{label}</Text>
-      </View>
-    </View>
-  );
-
-  const renderDashboard = () => (
-    <ScrollView style={styles.dashboardContent}>
-      <View style={styles.metricsHeader}>
-        <MaterialCommunityIcons name="instagram" size={32} color="#2171C1" />
-        <Text style={styles.accountTitle}>@{selectedAccount}</Text>
-      </View>
-
-      <View style={styles.metricsOverview}>
-        {renderMetricItem('Followers', DUMMY_METRICS.followers.toLocaleString(), 'account-group')}
-        <View style={styles.metricDivider} />
-        {renderMetricItem('Growth', `+${DUMMY_METRICS.followersGrowth}`, 'trending-up')}
-        <View style={styles.metricDivider} />
-        {renderMetricItem('Engagement', `${DUMMY_METRICS.engagement}%`, 'heart-outline')}
-      </View>
-
-      <View style={styles.metricSection}>
-        <Text style={styles.sectionTitle}>Performance Metrics</Text>
-        <View style={styles.metricsGrid}>
-          {renderMetricItem('Impressions', DUMMY_METRICS.impressions.toLocaleString(), 'eye-outline')}
-          {renderMetricItem('Reach Rate', `${DUMMY_METRICS.reachRate}%`, 'chart-line')}
-          {renderMetricItem('Top Post Likes', DUMMY_METRICS.topPostLikes.toLocaleString(), 'thumb-up-outline')}
-          {renderMetricItem('Posts This Week', DUMMY_METRICS.postsThisWeek, 'image-multiple')}
-        </View>
-      </View>
-
-      <View style={styles.metricSection}>
-        <Text style={styles.sectionTitle}>Recent Posts</Text>
-        <View style={styles.recentPosts}>
-          {[1, 2, 3].map((i) => (
-            <View key={i} style={styles.postPreview}>
-              <Image
-                source={{ uri: `https://picsum.photos/200/200?random=${i}` }}
-                style={styles.postImage}
-              />
-              <View style={styles.postStats}>
-                <MaterialCommunityIcons name="heart" size={12} color="#EF4444" />
-                <Text style={styles.postStatsText}>{Math.floor(Math.random() * 1000)}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
-    </ScrollView>
-  );
-
-  const renderVideoPreview = () => {
-    if (!selectedVideo) return null;
-
-    return (
-      <View style={styles.videoPreviewStrip}>
-        <Image 
-          source={{ uri: selectedVideo.thumbnailUri || selectedVideo.uri }} 
-          style={styles.previewThumbnail}
-          resizeMode="cover"
-        />
-        <View style={styles.previewInfo}>
-          <View style={styles.infoItem}>
-            <MaterialCommunityIcons name="clock-outline" size={16} color="#2171C1" />
-            <Text style={styles.infoText}>{formatDuration(selectedVideo.duration)}</Text>
-          </View>
-          <TouchableOpacity 
-            style={styles.changeVideoButton}
-            onPress={pickVideo}
-          >
-            <Text style={styles.changeVideoText}>Change</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+  const handleLanguageToggle = (langCode: string) => {
+    setSelectedLanguages(prev => 
+      prev.includes(langCode) 
+        ? prev.filter(code => code !== langCode)
+        : [...prev, langCode]
     );
   };
 
-  const renderContent = () => {
-    if (!selectedVideo) {
-      return (
-        <View style={styles.uploadContainer}>
-          <View style={styles.uploadCircle}>
-            <LinearGradient
-              colors={[
-                '#ADB6C4',
-                '#294C60',
-                '#001B2E',
-              ]}
-              style={[StyleSheet.absoluteFill, styles.circleGradient]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            />
-            <View style={styles.textButtonContainer}>
-              <CurvedPath />
-              <TouchableOpacity 
-                onPress={pickVideo} 
-                activeOpacity={0.7}
-                hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-              >
-                <Text style={styles.uploadText}>select a video to upload</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      );
-    }
+  const filteredLanguages = AVAILABLE_LANGUAGES.filter(lang =>
+    lang.name.toLowerCase().includes(languageSearch.toLowerCase())
+  );
 
-    return (
-      <View style={styles.content}>
-        <View style={styles.detailsContainer}>
-          <ScrollView style={styles.scrollContent}>
-            {renderVideoPreview()}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Caption</Text>
+  const renderLanguageSelector = () => (
+    <View style={styles.languageSection}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Target Languages</Text>
+        <Text style={styles.languageCount}>
+          {selectedLanguages.length} selected
+        </Text>
+      </View>
+      
+      <View style={styles.searchContainer}>
+        <MaterialCommunityIcons name="magnify" size={16} color="#6B7280" />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search languages..."
+          value={languageSearch}
+          onChangeText={setLanguageSearch}
+          placeholderTextColor="#9CA3AF"
+        />
+        {languageSearch !== '' && (
+          <TouchableOpacity 
+            onPress={() => setLanguageSearch('')}
+            style={styles.clearButton}
+          >
+            <MaterialCommunityIcons name="close-circle" size={16} color="#6B7280" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.languageList}
+      >
+        {filteredLanguages.map(lang => (
+          <TouchableOpacity
+            key={lang.code}
+            style={[
+              styles.languageChip,
+              selectedLanguages.includes(lang.code) && styles.languageChipSelected
+            ]}
+            onPress={() => handleLanguageToggle(lang.code)}
+          >
+            <Text style={[
+              styles.languageChipText,
+              selectedLanguages.includes(lang.code) && styles.languageChipTextSelected
+            ]}>
+              {lang.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        {filteredLanguages.length === 0 && (
+          <Text style={styles.noResultsText}>No languages found</Text>
+        )}
+      </ScrollView>
+    </View>
+  );
+
+  const renderUploadArea = () => (
+    <TouchableOpacity 
+      style={styles.uploadArea} 
+      onPress={pickVideo}
+      activeOpacity={0.7}
+    >
+      {selectedVideo ? (
+        <>
+          {selectedVideo.thumbnailUri ? (
+            <Image
+              source={{ uri: selectedVideo.thumbnailUri }}
+              style={styles.thumbnail}
+            />
+          ) : (
+            <View style={styles.placeholderThumbnail}>
+              <MaterialCommunityIcons name="video" size={48} color="#2171C1" />
+            </View>
+          )}
+          <Text style={styles.videoName}>{selectedVideo.name}</Text>
+          <Text style={styles.videoDetails}>
+            {Math.round(selectedVideo.duration)}s • {formatFileSize(selectedVideo.size)}
+          </Text>
+          <TouchableOpacity
+            style={styles.changeButton}
+            onPress={pickVideo}
+          >
+            <Text style={styles.changeButtonText}>Change Video</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <>
+          <MaterialCommunityIcons name="cloud-upload" size={48} color="#2171C1" />
+          <Text style={styles.uploadText}>Tap to select a video</Text>
+          <Text style={styles.uploadSubtext}>MP4 format, max {MAX_DURATION} seconds</Text>
+        </>
+      )}
+    </TouchableOpacity>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {!selectedVideo ? (
+        <View style={styles.centerContainer}>
+          {renderUploadArea()}
+        </View>
+      ) : (
+        <>
+          <ScrollView style={styles.content}>
+            <View style={styles.header}>
+              <Text style={styles.title}>Upload Video</Text>
+            </View>
+
+            {renderUploadArea()}
+
+            {renderLanguageSelector()}
+
+            <View style={styles.captionContainer}>
+              <Text style={styles.sectionTitle}>Caption</Text>
               <TextInput
                 style={styles.captionInput}
+                placeholder="Write a caption..."
+                value={caption}
+                onChangeText={setCaption}
                 multiline
-                placeholder="Enter your video caption..."
-                value={captionDetails.caption}
-                onChangeText={(text) => setCaptionDetails(prev => ({ ...prev, caption: text }))}
+                maxLength={2200}
               />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.languagesLabel}>Select Languages (Video & Caption)</Text>
-              <View style={styles.languageGrid}>
-                {AVAILABLE_LANGUAGES.map(lang => (
-                  <TouchableOpacity
-                    key={lang.code}
-                    style={[
-                      styles.languageButton,
-                      captionDetails.targetLanguages.includes(lang.code) && styles.languageButtonSelected
-                    ]}
-                    onPress={() => toggleLanguage(lang.code)}
-                  >
-                    <Text style={[
-                      styles.languageButtonText,
-                      captionDetails.targetLanguages.includes(lang.code) && styles.languageButtonTextSelected
-                    ]}>
-                      {lang.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.captionHint}>
+                <MaterialCommunityIcons name="translate" size={16} color="#6B7280" />
+                <Text style={styles.hintText}>
+                  Your caption will be translated into your selected languages
+                </Text>
               </View>
             </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Post to Accounts</Text>
-              <View style={styles.accountsList}>
-                {captionDetails.targetLanguages.map(langCode => renderAccountItem(langCode))}
+            <View style={styles.accountsSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Post to Accounts</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Accounts')}>
+                  <Text style={styles.addAccountText}>Add Account</Text>
+                </TouchableOpacity>
               </View>
-              {captionDetails.targetLanguages.length === 0 && (
-                <View style={styles.noAccountsContainer}>
-                  <Text style={styles.noAccountsText}>Select languages to see recommended accounts</Text>
+              
+              {connectedAccounts.length > 0 ? (
+                <View style={styles.accountsList}>
+                  {connectedAccounts.map((account, index) => (
+                    <View key={account.userId || index} style={styles.accountItem}>
+                      <ListItem
+                        accountName={account.username}
+                        subtitle={`Connected via ${account.pageName}`}
+                        status="connected"
+                      />
+                    </View>
+                  ))}
                 </View>
+              ) : (
+                <TouchableOpacity 
+                  style={styles.noAccountsButton}
+                  onPress={() => navigation.navigate('Accounts')}
+                >
+                  <MaterialCommunityIcons name="account-plus" size={24} color="#2171C1" />
+                  <Text style={styles.noAccountsText}>Connect an account to post</Text>
+                </TouchableOpacity>
               )}
             </View>
           </ScrollView>
 
-          <View style={styles.actions}>
+          <View style={styles.footer}>
             <Button
-              title="Back"
-              variant="secondary"
-              leftIcon="arrow-left"
-              onPress={handleBack}
-              style={styles.actionButton}
-            />
-            <Button
-              title={isUploading ? "Uploading..." : "Upload"}
-              leftIcon="cloud-upload"
+              title={isUploading ? "Uploading..." : "Upload Video"}
               onPress={handleUpload}
-              style={styles.actionButton}
-              disabled={isUploading || !selectedVideo || captionDetails.targetLanguages.length === 0}
+              loading={isUploading}
+              disabled={connectedAccounts.length === 0 || selectedLanguages.length === 0}
             />
           </View>
-        </View>
-
-        <Modal
-          visible={!!selectedAccount}
-          onClose={() => setSelectedAccount(null)}
-          title="Account Dashboard"
-          size="large"
-        >
-          {renderDashboard()}
-        </Modal>
-      </View>
-    );
-  };
-
-  const resetState = () => {
-    setSelectedVideo(null);
-    setCaptionDetails({
-      caption: '',
-      targetLanguages: [],
-      id: `VID_${Date.now()}`
-    });
-    setIsUploading(false);
-  };
-
-  const validateVideo = (video: VideoSelection): string | null => {
-    if (!video.uri) {
-      return 'Invalid video file';
-    }
-    if (video.size > 100 * 1024 * 1024) { // 100MB limit
-      return 'Video file size must be less than 100MB';
-    }
-    if (video.duration > MAX_DURATION) {
-      return `Video duration must be less than ${MAX_DURATION} seconds`;
-    }
-    return null;
-  };
-
-  const MAX_POLLING_DURATION = 15 * 60 * 1000; // 15 minutes
-
-  const pollVideoStatus = async (videoId: string) => {
-    try {
-      const session = await fetchAuthSession();
-      const token = session.tokens?.accessToken?.toString();
-      if (!token) throw new Error('No auth token');
-
-      const response = await fetch(apiEndpoints.videos.status(videoId), {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch status');
-      
-      const data = await response.json();
-      console.log('[Status] Received status update:', data);
-
-      setProcessingStatus(prevStatus => {
-        if (!prevStatus) return null;
-
-        // Map backend status to frontend status (handle both upper and lowercase)
-        const statusMap: Record<string, ProcessingStatus['status']> = {
-          'pending_upload': 'pending_upload',
-          'PENDING_UPLOAD': 'pending_upload',
-          'uploading': 'uploading',
-          'UPLOADING': 'uploading',
-          'processing': 'processing',
-          'PROCESSING': 'processing',
-          'completed': 'completed',
-          'COMPLETED': 'completed',
-          'failed': 'failed',
-          'FAILED': 'failed',
-          // Add legacy status mappings
-          'dubbing': 'processing',
-          'dubbed': 'completed'
-        };
-
-        // Convert backend status to lowercase for consistent comparison
-        const backendStatus = (data.status || '').toLowerCase();
-        const newStatus = statusMap[data.status] || statusMap[backendStatus] || prevStatus.status;
-        console.log('[Status] Mapping status:', { 
-          from: data.status, 
-          to: newStatus, 
-          current: prevStatus.status 
-        });
-
-        const progress = data.progress || prevStatus.progress;
-
-        // Update language statuses
-        const updatedLanguages = Object.fromEntries(
-          Object.entries(prevStatus.languages).map(([lang, status]) => {
-            const langStatus = data.languages?.[lang];
-            if (!langStatus) return [lang, status];
-
-            return [lang, {
-              status: langStatus.status || status.status,
-              progress: langStatus.progress || status.progress,
-              error: langStatus.error
-            }];
-          })
-        );
-
-        return {
-          ...prevStatus,
-          status: newStatus,
-          progress: progress,
-          error: data.error,
-          languages: updatedLanguages
-        };
-      });
-
-      // Continue polling if not in a final state (check both upper and lowercase)
-      const status = (data.status || '').toLowerCase();
-      if (!['completed', 'failed', 'dubbed'].includes(status)) {
-        setTimeout(() => pollVideoStatus(videoId), 5000);
-      } else if (status === 'completed' || status === 'dubbed') {
-        setShowCelebration(true);
-        // Show completion for a moment before closing
-        setTimeout(() => {
-          setStatusModalVisible(false);
-          resetState();
-        }, 3000);
-      } else if (status === 'failed') {
-        // Show error state but allow manual dismissal
-        Alert.alert('Processing Failed', data.error || 'An error occurred during processing');
-      }
-    } catch (error) {
-      console.error('[Status] Error polling status:', error);
-      // Don't stop polling on temporary errors, unless we've been polling for too long
-      if (Date.now() - startTime < MAX_POLLING_DURATION) {
-        setTimeout(() => pollVideoStatus(videoId), 5000);
-      } else {
-        setProcessingStatus(prev => prev ? {
-          ...prev,
-          status: 'failed',
-          error: 'Polling timeout exceeded'
-        } : null);
-        Alert.alert('Processing Failed', 'Status check timed out. Please try again.');
-      }
-    }
-  };
-
-  const handleUpload = async () => {
-    if (!selectedVideo) {
-      setError('No video selected');
-      return;
-    }
-
-    let currentVideoId: string | null = null;
-
-    try {
-      setError(null);
-      setIsUploading(true);
-      setStatusModalVisible(true);
-      setProcessingStatus({
-        status: 'pending_upload',
-        progress: 0,
-        languages: Object.fromEntries(
-          captionDetails.targetLanguages.map(lang => [
-            lang,
-            { status: 'pending', progress: 0 }
-          ])
-        )
-      });
-
-      console.log('[Upload] Starting upload process with video:', {
-        name: selectedVideo.name,
-        size: formatFileSize(selectedVideo.size),
-        type: selectedVideo.type,
-        duration: formatDuration(selectedVideo.duration)
-      });
-      
-      // Get current auth session
-      console.log('[Upload] Fetching auth session...');
-      const session = await fetchAuthSession().catch((error: any) => {
-        console.error('[Upload] Auth session error:', error);
-        throw new Error('Failed to authenticate. Please try logging in again.');
-      });
-
-      // Get access token
-      const token = session.tokens?.accessToken?.toString();
-      if (!token) {
-        console.error('[Upload] No access token found in session');
-        throw new Error('Authentication required. Please log in again.');
-      }
-      console.log('[Upload] Successfully obtained access token');
-
-      // Prepare request for upload URL
-      const apiUrl = `${apiEndpoints.videos.upload}`;
-      console.log('[Upload] Making request to:', apiUrl);
-      
-      // Make request for upload URL with timeout
-      console.log('[Upload] Requesting presigned URL...');
-      const uploadUrlResponse = await Promise.race([
-        fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            fileName: selectedVideo.name,
-            fileType: selectedVideo.type,
-            fileSize: selectedVideo.size
-          })
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout. Please try again.')), 30000)
-        )
-      ]) as Response;
-
-      if (!uploadUrlResponse.ok) {
-        const errorData = await uploadUrlResponse.text();
-        console.error('[Upload] Failed to get upload URL:', {
-          status: uploadUrlResponse.status,
-          statusText: uploadUrlResponse.statusText,
-          error: errorData
-        });
-        throw new Error(`Failed to get upload URL: ${uploadUrlResponse.status} - ${errorData}`);
-      }
-
-      const data = await uploadUrlResponse.json() as UploadResponse;
-      currentVideoId = data.videoId;
-      console.log('[Upload] Received presigned URL response:', {
-        videoId: data.videoId,
-        hasUploadUrl: !!data.uploadUrl
-      });
-
-      // Get the video blob
-      console.log('[Upload] Reading video file...');
-      const videoResponse = await fetch(selectedVideo.uri);
-      if (!videoResponse.ok) {
-        console.error('[Upload] Failed to read video file:', videoResponse.statusText);
-        throw new Error('Failed to read video file. Please try again.');
-      }
-      const videoBlob = await videoResponse.blob();
-      
-      // Determine content type from the blob
-      const contentType = videoBlob.type || 'video/mp4';
-
-      // Upload video to S3 with progress tracking
-      console.log('[Upload] Starting S3 upload...');
-      const xhr = new XMLHttpRequest();
-      
-      // Single onprogress handler for upload
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const progress = (event.loaded / event.total) * 100;
-          console.log(`[Upload] Progress: ${progress.toFixed(1)}%`);
-          setUploadProgress(progress);
-          setProcessingStatus(prev => prev ? {
-            ...prev,
-            status: 'uploading',
-            progress
-          } : null);
-        }
-      };
-
-      // Wait for S3 upload to complete
-      await new Promise((resolve, reject) => {
-        xhr.open('PUT', data.uploadUrl);
-        xhr.setRequestHeader('Content-Type', contentType);
-        xhr.onload = () => {
-          if (xhr.status === 200) {
-            console.log('[Upload] S3 upload completed successfully');
-            // Update status to show upload complete
-            setProcessingStatus(prev => prev ? {
-              ...prev,
-              status: 'processing',
-              progress: 100,
-              languages: Object.fromEntries(
-                Object.entries(prev.languages).map(([lang, status]) => [
-                  lang,
-                  { ...status, status: 'pending' }
-                ])
-              )
-            } : null);
-            resolve(null);
-          } else {
-            console.error('[Upload] S3 upload failed:', {
-              status: xhr.status,
-              response: xhr.responseText
-            });
-            reject(new Error(`Upload failed with status ${xhr.status}`));
-          }
-        };
-        xhr.onerror = () => {
-          console.error('[Upload] Network error during S3 upload');
-          reject(new Error('Network error during upload'));
-        };
-        xhr.send(videoBlob);
-      });
-
-      // Start processing
-      console.log('[Upload] Starting video processing...');
-      const processResponse = await fetch(apiEndpoints.videos.process(data.videoId), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          sourceLanguage: 'en',
-          targetLanguages: captionDetails.targetLanguages,
-          caption: captionDetails.caption
-        })
-      });
-
-      if (!processResponse.ok) {
-        const errorData = await processResponse.json();
-        console.error('[Upload] Processing request failed:', errorData);
-        throw new Error(errorData.error || 'Failed to start processing');
-      }
-
-      console.log('[Upload] Video processing started successfully');
-      
-      // Start polling for status immediately after processing starts
-      // Add a small delay to allow backend to update status
-      setTimeout(() => pollVideoStatus(data.videoId), 2000);
-
-    } catch (error) {
-      console.error('[Upload] Error details:', {
-        cause: error instanceof Error ? error.cause : undefined,
-        message: error instanceof Error ? error.message : String(error),
-        name: error instanceof Error ? error.name : 'UnknownError',
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      Alert.alert('Upload Failed', errorMessage);
-      setError(errorMessage);
-      setProcessingStatus(prev => prev ? {
-        ...prev,
-        status: 'failed',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      } : null);
-      
-      // Reset state on error
-      resetState();
-    } finally {
-      setIsUploading(false);
-      setUploadProgress(0);
-    }
-  };
-
-  const handleProceed = () => {
-    Animated.parallel([
-      Animated.timing(successScaleAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(successOpacityAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setShowCelebration(false);
-      setStatusModalVisible(false);
-      resetState();
-    });
-  };
-
-  const renderSuccessPopup = () => {
-    const languageCount = processingStatus?.languages ? Object.keys(processingStatus.languages).length : 0;
-    
-    return (
-      <Animated.View 
-        style={[
-          styles.successPopup,
-          {
-            opacity: successOpacityAnim,
-            transform: [
-              { scale: successScaleAnim },
-              { translateY: successScaleAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [50, 0],
-              })},
-            ],
-          },
-        ]}
-      >
-        <View style={styles.successIconContainer}>
-          <MaterialCommunityIcons 
-            name="check-circle" 
-            size={40} 
-            color="#34D399"
-          />
-        </View>
-        <Text style={styles.successTitle}>Processing Complete!</Text>
-        <Text style={styles.successMessage}>
-          Successfully processed your video in {languageCount} language{languageCount !== 1 ? 's' : ''}.
-        </Text>
-        <Button
-          title="Proceed"
-          onPress={handleProceed}
-          style={styles.proceedButton}
-        />
-      </Animated.View>
-    );
-  };
-
-  const renderStatusModal = () => (
-    <Modal
-      visible={statusModalVisible}
-      onClose={() => {
-        if (processingStatus?.status !== 'processing') {
-          setStatusModalVisible(false);
-        }
-      }}
-      title="Processing Status"
-      size="small"
-    >
-      <View style={styles.statusContent}>
-        <View style={styles.stageIndicator}>
-          <View style={[styles.stage, styles.stageCompleted]}>
-            <MaterialCommunityIcons name="check-circle" size={20} color="#34D399" />
-            <Text style={styles.stageText}>Upload</Text>
-          </View>
-          <View style={[styles.stageLine, processingStatus?.status !== 'pending_upload' ? styles.stageLineCompleted : null]} />
-          <View style={[styles.stage, processingStatus?.status === 'processing' ? styles.stageActive : processingStatus?.status === 'completed' ? styles.stageCompleted : null]}>
-            <MaterialCommunityIcons 
-              name={processingStatus?.status === 'completed' ? "check-circle" : "clock-outline"} 
-              size={20} 
-              color={processingStatus?.status === 'completed' ? "#34D399" : processingStatus?.status === 'processing' ? "#2171C1" : "#9CA3AF"} 
-            />
-            <Text style={[styles.stageText, processingStatus?.status === 'processing' ? styles.stageTextActive : null]}>Process</Text>
-          </View>
-          <View style={[styles.stageLine, processingStatus?.status === 'completed' ? styles.stageLineCompleted : null]} />
-          <View style={[styles.stage, processingStatus?.status === 'completed' ? styles.stageCompleted : null]}>
-            <MaterialCommunityIcons 
-              name={processingStatus?.status === 'completed' ? "check-circle" : "flag-outline"} 
-              size={20} 
-              color={processingStatus?.status === 'completed' ? "#34D399" : "#9CA3AF"} 
-            />
-            <Text style={styles.stageText}>Complete</Text>
-          </View>
-        </View>
-
-        <Text style={styles.statusMessage}>
-          {processingStatus?.status === 'pending_upload' ? 'Preparing your video for upload...' :
-           processingStatus?.status === 'uploading' ? 'Uploading your video to our servers...' :
-           processingStatus?.status === 'processing' ? 'Processing your video(s). This may take up to a minute...' :
-           processingStatus?.status === 'completed' ? 'All done! Your video has been processed successfully.' :
-           'An error occurred during processing.'}
-        </Text>
-
-        {processingStatus?.status === 'uploading' && (
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill,
-                  { width: `${processingStatus.progress}%` }
-                ]}
-              />
-            </View>
-            <Text style={styles.progressText}>{Math.round(processingStatus.progress)}%</Text>
-          </View>
-        )}
-
-        {(processingStatus?.status === 'processing' || processingStatus?.status === 'completed') && (
-          <View style={styles.languageStatusList}>
-            {Object.entries(processingStatus.languages).map(([lang, status]) => (
-              <View key={lang} style={styles.languageStatusItem}>
-                <View style={styles.languageTag}>
-                  <Text style={styles.languageTagText}>
-                    {AVAILABLE_LANGUAGES.find(l => l.code === lang)?.name}
-                  </Text>
-                  <MaterialCommunityIcons
-                    name={
-                      status.status === 'completed' ? 'check-circle' :
-                      status.status === 'failed' ? 'alert-circle' :
-                      'progress-clock'
-                    }
-                    size={16}
-                    color={
-                      status.status === 'completed' ? '#34D399' :
-                      status.status === 'failed' ? '#EF4444' :
-                      '#2171C1'
-                    }
-                  />
-                </View>
-                {status.status === 'processing' && (
-                  <View style={styles.progressBar}>
-                    <View 
-                      style={[
-                        styles.progressFill,
-                        { width: `${status.progress}%` }
-                      ]}
-                    />
-                  </View>
-                )}
-              </View>
-            ))}
-          </View>
-        )}
-
-        {processingStatus?.error && (
-          <Text style={styles.errorText}>{processingStatus.error}</Text>
-        )}
-
-        {showCelebration && renderSuccessPopup()}
-      </View>
-    </Modal>
-  );
-
-  const handleConnectInstagram = async (langCode: string) => {
-    try {
-      // Store the language code using AsyncStorage
-      await AsyncStorage.setItem('pendingLanguageCode', langCode);
-      
-      // Redirect to Instagram authorization
-      const instagramAuthUrl = `https://api.instagram.com/oauth/authorize?client_id=${config.instagram.clientId}&redirect_uri=${config.instagram.redirectUri}&scope=user_profile,user_media&response_type=code`;
-      
-      // Use Linking for opening URLs in React Native
-      await Linking.openURL(instagramAuthUrl);
-    } catch (error) {
-      console.error('Error connecting Instagram:', error);
-      Alert.alert('Error', 'Failed to connect Instagram account. Please try again.');
-    }
-  };
-
-  // Handle Instagram OAuth callback
-  useEffect(() => {
-    const handleOAuthCallback = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get('code');
-      const error = urlParams.get('error');
-      const pendingLanguageCode = await AsyncStorage.getItem('pendingLanguageCode');
-
-      if (error) {
-        Alert.alert('Error', 'Failed to connect Instagram account. Please try again.');
-        return;
-      }
-
-      if (code && pendingLanguageCode) {
-        try {
-          // Exchange code for access token (this would be done by your backend)
-          // For now, we'll simulate a successful connection
-          const mockResponse = {
-            accessToken: 'mock_token',
-            userId: 'mock_user_id',
-            username: getRecommendedUsername(pendingLanguageCode)
-          };
-
-          // Update connected accounts
-          setConnectedAccounts(prev => [
-            ...prev,
-            {
-              platform: 'instagram',
-              username: mockResponse.username,
-              language: pendingLanguageCode,
-              isConnected: true,
-              accessToken: mockResponse.accessToken,
-              userId: mockResponse.userId
-            }
-          ]);
-
-          // Clear pending language code
-          await AsyncStorage.removeItem('pendingLanguageCode');
-        } catch (error) {
-          console.error('Error exchanging code for token:', error);
-          Alert.alert('Error', 'Failed to complete Instagram connection. Please try again.');
-        }
-      }
-    };
-
-    handleOAuthCallback();
-  }, []);
-
-  const renderAccountItem = (langCode: string) => {
-    const existingAccount = connectedAccounts.find(
-      account => account.isConnected && account.language === langCode
-    );
-
-    const languageName = AVAILABLE_LANGUAGES.find(lang => lang.code === langCode)?.name;
-
-    if (existingAccount) {
-      return (
-        <View key={langCode} style={styles.accountItem}>
-          <ListItem
-            accountName={existingAccount.username.replace('@', '')}
-            status="connected"
-            language={languageName}
-            onPress={() => handleAccountPress(existingAccount.username.replace('@', ''))}
-          />
-        </View>
-      );
-    }
-
-    return (
-      <View key={langCode} style={styles.accountItem}>
-        <ListItem
-          accountName={getRecommendedUsername(langCode)}
-          subtitle="Connect Instagram Account"
-          status="disconnected"
-          language={languageName}
-          onPress={() => handleConnectInstagram(langCode)}
-        />
-      </View>
-    );
-  };
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={[
-          'rgba(33, 113, 193, 0.9)',
-          'rgba(33, 113, 193, 0.4)',
-          'rgba(33, 113, 193, 0.3)',
-          'transparent'
-        ]}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      />
-      <ScrollView style={styles.scrollContent}>
-        {renderContent()}
-      </ScrollView>
-      {renderStatusModal()}
-      {renderSuccessPopup()}
+        </>
+      )}
     </SafeAreaView>
   );
 }
-
-const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
   content: {
     flex: 1,
     padding: 16,
   },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  uploadContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: Dimensions.get('window').height - 100,
-    marginTop: -50,
-  },
-  uploadCircle: {
-    width: width * 0.8,
-    height: width * 0.8,
-    borderRadius: (width * 0.8) / 2,
-    backgroundColor: 'transparent',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  circleGradient: {
-    borderRadius: (width * 0.8) / 2,
-  },
-  uploadIcon: {
-    position: 'absolute',
-    top: '25%',
-    transform: [{ translateY: -24 }],
-  },
-  textButtonContainer: {
-    alignItems: 'center',
-    position: 'absolute',
-    width: '100%',
-    top: '50%',
-  },
-  curvedPath: {
-    position: 'absolute',
-    opacity: 0.5,
-    top: 0,
-    left: 0,
-  },
-  uploadText: {
-    fontSize: 16,
-    color: '#E8F1F2',
-    textAlign: 'center',
-    marginBottom: 16,
-    transform: [{ translateY: -8 }],
-  },
-  button: {
-    minWidth: 200,
-    alignSelf: 'center',
-    transform: [{ translateY: -4 }],
-  },
-  previewContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  thumbnail: {
-    width: '100%',
-    height: width * 0.5625, // 16:9 aspect ratio
-    backgroundColor: '#F3F4F6',
-  },
-  videoInfo: {
-    flexDirection: 'row',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  infoText: {
-    fontSize: 13,
-    color: '#374151',
-  },
-  actions: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    backgroundColor: '#FFFFFF',
-  },
-  actionButton: {
-    flex: 1,
-  },
-  detailsContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    flex: 1, // Take up all available space
-  },
-  inputContainer: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  inputLabel: {
-    fontSize: 14,
-    color: '#374151',
-    marginBottom: 8,
-    fontWeight: '500',
-    textAlign: 'left',
-  },
-  captionInput: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    padding: 12,
-    height: 100,
-    textAlignVertical: 'top',
-    fontSize: 14,
-    color: '#1F2937',
-    textAlign: 'left',
-  },
-  languageGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-    justifyContent: 'center',
-  },
-  languageButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  languageButtonSelected: {
-    backgroundColor: '#2171C1',
-    borderColor: '#2171C1',
-  },
-  languageButtonText: {
-    fontSize: 14,
-    color: '#374151',
-  },
-  languageButtonTextSelected: {
-    color: '#FFFFFF',
-  },
-  accountsList: {
-    paddingTop: 8,
-    alignItems: 'stretch',
-  },
-  accountItem: {
-    marginBottom: 8,
-  },
-  noAccountsContainer: {
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  noAccountsText: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 12,
-  },
-  connectButton: {
-    minWidth: 200,
-    alignSelf: 'center',
-    marginTop: 16,
-  },
-  languagesLabel: {
-    fontSize: 14,
-    color: '#374151',
-    marginBottom: 8,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  dashboardContent: {
-    padding: 16,
-  },
-  metricsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  header: {
     marginBottom: 24,
-    gap: 12,
   },
-  accountTitle: {
+  title: {
     fontSize: 24,
     fontWeight: '600',
     color: '#1F2937',
   },
-  metricsOverview: {
-    flexDirection: 'row',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-  },
-  metricItem: {
-    flex: 1,
-    flexDirection: 'row',
+  uploadArea: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
     alignItems: 'center',
-    gap: 12,
-  },
-  metricIcon: {
-    backgroundColor: '#EFF6FF',
-    padding: 8,
-    borderRadius: 8,
-  },
-  metricValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  metricLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  metricDivider: {
-    width: 1,
-    backgroundColor: '#E5E7EB',
-    marginHorizontal: 16,
-  },
-  metricSection: {
+    justifyContent: 'center',
     marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 16,
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  recentPosts: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  postPreview: {
-    flex: 1,
-    aspectRatio: 1,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#F3F4F6',
-  },
-  postImage: {
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+    minHeight: 200,
     width: '100%',
-    height: '100%',
+    maxWidth: 400,
   },
-  postStats: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    flexDirection: 'row',
+  thumbnail: {
+    width: '100%',
+    height: 200,
+    borderRadius: 16,
+    marginBottom: 12,
+  },
+  placeholderThumbnail: {
+    width: '100%',
+    height: 200,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
+    justifyContent: 'center',
+    marginBottom: 12,
   },
-  postStatsText: {
-    fontSize: 12,
-    color: '#FFFFFF',
+  uploadText: {
+    fontSize: 16,
     fontWeight: '500',
+    color: '#374151',
+    marginTop: 12,
   },
-  statusContent: {
-    padding: 16,
-  },
-  stageIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    paddingHorizontal: 12,
-  },
-  stage: {
-    alignItems: 'center',
-    opacity: 0.5,
-  },
-  stageActive: {
-    opacity: 1,
-  },
-  stageCompleted: {
-    opacity: 1,
-  },
-  stageLine: {
-    flex: 1,
-    height: 2,
-    backgroundColor: '#E5E7EB',
-    marginHorizontal: 8,
-  },
-  stageLineCompleted: {
-    backgroundColor: '#34D399',
-  },
-  stageText: {
-    fontSize: 12,
+  uploadSubtext: {
+    fontSize: 14,
     color: '#6B7280',
     marginTop: 4,
   },
-  stageTextActive: {
-    color: '#2171C1',
+  videoName: {
+    fontSize: 16,
     fontWeight: '500',
+    color: '#1F2937',
   },
-  statusMessage: {
+  videoDetails: {
     fontSize: 14,
     color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 20,
+    marginTop: 4,
   },
-  progressContainer: {
-    marginBottom: 16,
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 2,
-    overflow: 'hidden',
-    marginVertical: 8,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#2171C1',
-    borderRadius: 2,
-  },
-  progressText: {
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'right',
-  },
-  languageStatusList: {
-    gap: 12,
-  },
-  languageStatusItem: {
-    gap: 4,
-  },
-  languageTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 8,
-    alignSelf: 'flex-start',
-  },
-  languageTagText: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  celebrationContainer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  proceedButton: {
-    marginTop: 16,
-    minWidth: 120,
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#EF4444',
+  changeButton: {
     marginTop: 12,
+    padding: 8,
   },
-  successPopup: {
-    position: 'absolute',
-    bottom: 40,
-    left: 20,
-    right: 20,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    zIndex: 20,
+  changeButtonText: {
+    color: '#2171C1',
+    fontSize: 14,
+    fontWeight: '500',
   },
-  successIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#ECFDF5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
+  captionContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
   },
-  successTitle: {
-    fontSize: 18,
+  sectionTitle: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#1F2937',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  successMessage: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
+  captionInput: {
+    fontSize: 16,
+    color: '#1F2937',
+    minHeight: 100,
+    textAlignVertical: 'top',
+    padding: 0,
   },
-  videoPreviewStrip: {
-    flexDirection: 'row',
-    backgroundColor: '#F9FAFB',
+  accountsSection: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 16,
-    height: 72,
+    padding: 16,
+    marginBottom: 24,
   },
-  previewThumbnail: {
-    width: 72,
-    height: 72,
-    backgroundColor: '#E5E7EB',
-  },
-  previewInfo: {
-    flex: 1,
+  sectionHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
     justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  changeVideoButton: {
-    backgroundColor: '#E5E7EB',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  changeVideoText: {
-    fontSize: 13,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  modalContent: {
-    padding: 20,
-  },
-  formGroup: {
-    marginBottom: 20,
-  },
-  formLabel: {
+  addAccountText: {
+    color: '#2171C1',
     fontSize: 14,
-    color: '#374151',
-    marginBottom: 8,
     fontWeight: '500',
   },
-  formInput: {
+  accountsList: {
+    gap: 12,
+  },
+  accountItem: {
     backgroundColor: '#F9FAFB',
     borderRadius: 8,
-    padding: 12,
+    overflow: 'hidden',
+  },
+  noAccountsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    gap: 8,
+  },
+  noAccountsText: {
+    color: '#2171C1',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  footer: {
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  languageSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+  },
+  languageList: {
+    paddingVertical: 8,
+    gap: 8,
+  },
+  languageChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    marginRight: 8,
+  },
+  languageChipSelected: {
+    backgroundColor: '#2171C1',
+  },
+  languageChipText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  languageChipTextSelected: {
+    color: '#FFFFFF',
+  },
+  languageCount: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  searchInput: {
+    flex: 1,
     fontSize: 14,
     color: '#1F2937',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    paddingHorizontal: 8,
+    paddingVertical: 0,
+    height: 20,
   },
-  bioInput: {
-    height: 100,
-    textAlignVertical: 'top',
+  clearButton: {
+    padding: 2,
   },
-  formActions: {
+  noResultsText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    paddingVertical: 8,
+  },
+  captionHint: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 20,
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 6,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  hintText: {
+    fontSize: 13,
+    color: '#6B7280',
+    flex: 1,
   },
 }); 

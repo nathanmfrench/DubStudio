@@ -9,6 +9,8 @@ import {
   Image,
   Dimensions,
   Animated,
+  Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -16,6 +18,8 @@ import { ListItem } from '../components/ListItem';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { LinearGradient } from 'expo-linear-gradient';
+import { facebookService } from '../services/FacebookService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AccountAnalytics {
   followers: number;
@@ -34,6 +38,16 @@ interface Account {
   region: string;
   language: string;
   analytics: AccountAnalytics;
+}
+
+interface ConnectedAccount {
+  platform: 'instagram';
+  username: string;
+  isConnected: boolean;
+  accessToken?: string;
+  userId?: string;
+  pageId?: string;
+  pageName?: string;
 }
 
 // Mock data - replace with real API data later
@@ -179,6 +193,8 @@ function BackgroundPattern() {
 export function AccountsScreen() {
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [showDashboard, setShowDashboard] = useState(false);
+  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const formatNumber = (num: number): string => {
     if (num >= 1000000) {
@@ -197,6 +213,104 @@ export function AccountsScreen() {
     setShowDashboard(true);
     console.warn('Show dashboard set to true');
   };
+
+  const handleConnectFacebook = async () => {
+    setIsLoading(true);
+    try {
+      // Facebook connection flow (moved from UploadScreen)
+      if (!facebookService.isInitialized()) {
+        facebookService.initialize();
+      }
+
+      const loginResult = await facebookService.login();
+      const pages = await facebookService.getPages();
+
+      if (!pages || pages.length === 0) {
+        Alert.alert(
+          'No Facebook Pages Found',
+          'You need to have a Facebook Page to connect Instagram business accounts. Would you like to create one?',
+          [
+            {
+              text: 'Create Page',
+              onPress: () => Linking.openURL('https://www.facebook.com/pages/create'),
+            },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+        return;
+      }
+
+      const instagramAccounts = await Promise.all(
+        pages.map(async (page) => {
+          try {
+            const instagramAccount = await facebookService.getInstagramBusinessAccount(page.id);
+            return { pageId: page.id, pageName: page.name, instagramAccount };
+          } catch (error) {
+            console.error(`Error fetching Instagram account for page ${page.name}:`, error);
+            return { pageId: page.id, pageName: page.name, instagramAccount: null };
+          }
+        })
+      );
+
+      const connectedAccounts = instagramAccounts.filter(acc => acc.instagramAccount);
+
+      if (connectedAccounts.length === 0) {
+        Alert.alert(
+          'No Instagram Business Accounts',
+          'Would you like to connect an Instagram account to one of your Facebook pages?',
+          [
+            {
+              text: 'Connect Instagram',
+              onPress: () => Linking.openURL('https://business.facebook.com/settings/instagram'),
+            },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+        return;
+      }
+
+      const updatedAccounts = connectedAccounts.map(acc => ({
+        platform: 'instagram' as const,
+        username: acc.instagramAccount?.username || '',
+        isConnected: true,
+        accessToken: loginResult.accessToken,
+        userId: acc.instagramAccount?.id || '',
+        pageId: acc.pageId,
+        pageName: acc.pageName,
+      }));
+
+      setConnectedAccounts(updatedAccounts);
+      
+      // Store accounts in AsyncStorage for persistence
+      await AsyncStorage.setItem('connectedAccounts', JSON.stringify(updatedAccounts));
+
+      Alert.alert(
+        'Success',
+        `Connected ${updatedAccounts.length} Instagram business account${updatedAccounts.length > 1 ? 's' : ''}.`
+      );
+
+    } catch (error) {
+      console.error('Connection error:', error);
+      Alert.alert('Error', 'Failed to connect accounts. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load saved accounts on mount
+  useEffect(() => {
+    const loadAccounts = async () => {
+      try {
+        const saved = await AsyncStorage.getItem('connectedAccounts');
+        if (saved) {
+          setConnectedAccounts(JSON.parse(saved));
+        }
+      } catch (error) {
+        console.error('Error loading accounts:', error);
+      }
+    };
+    loadAccounts();
+  }, []);
 
   const renderMetricItem = (label: string, value: string | number, icon: keyof typeof MaterialCommunityIcons.glyphMap) => (
     <View style={[styles.metricItem, styles.metricCard]}>
@@ -268,31 +382,44 @@ export function AccountsScreen() {
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       />
-      <ScrollView style={styles.scrollContent}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Your Accounts</Text>
+      <View style={styles.contentContainer}>
+        <ScrollView style={styles.scrollContent}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Accounts</Text>
+          </View>
+
+          <View style={styles.accountsContainer}>
+            {connectedAccounts.length > 0 ? (
+              connectedAccounts.map((account, index) => (
+                <View key={account.userId || index} style={styles.accountCard}>
+                  <ListItem
+                    accountName={account.username}
+                    subtitle={`Connected via ${account.pageName}`}
+                    status="connected"
+                  />
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <MaterialCommunityIcons name="account-plus" size={48} color="#9CA3AF" />
+                <Text style={styles.emptyStateText}>No connected accounts</Text>
+                <Text style={styles.emptyStateSubtext}>
+                  Connect your Facebook page with Instagram business accounts to get started
+                </Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+        
+        <View style={styles.bottomContainer}>
           <Button
-            title="Add Account"
-            size="small"
-            onPress={() => {}}
-            leftIcon="plus-circle"
+            title="Connect Facebook"
+            leftIcon="facebook"
+            onPress={handleConnectFacebook}
+            loading={isLoading}
           />
         </View>
-
-        <View style={styles.accountsContainer}>
-          {mockAccounts.map((account) => (
-            <View key={account.id} style={styles.accountCard}>
-              <ListItem
-                accountName={account.accountName}
-                subtitle={`${account.region} • ${account.language}`}
-                status="connected"
-                language={account.language}
-                onPress={() => handleAccountPress(account)}
-              />
-            </View>
-          ))}
-        </View>
-      </ScrollView>
+      </View>
 
       <Modal
         visible={showDashboard}
@@ -477,5 +604,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     marginTop: 2,
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginTop: 24,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#374151',
+    marginTop: 12,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  contentContainer: {
+    flex: 1,
+  },
+  bottomContainer: {
+    padding: 16,
+    backgroundColor: 'transparent',
   },
 }); 
