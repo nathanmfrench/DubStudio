@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTheme } from '../contexts/ThemeContext';
 
 type Status = 'connected' | 'disconnected' | 'pending' | 'error';
 
@@ -19,6 +20,8 @@ export function ListItem({
   language,
   onPress,
 }: ListItemProps) {
+  const { colors } = useTheme();
+
   const getStatusColor = () => {
     switch (status) {
       case 'connected':
@@ -47,21 +50,21 @@ export function ListItem({
 
   return (
     <TouchableOpacity
-      style={styles.container}
+      style={[styles.container, { backgroundColor: 'transparent' }]}
       onPress={onPress}
       activeOpacity={0.9}
     >
       <View style={styles.content}>
-        <View style={styles.platformIcon}>
+        <View style={[styles.platformIcon, { backgroundColor: colors.cardBackground }]}>
           <MaterialCommunityIcons
             name="instagram"
             size={24}
-            color="#2171C1"
+            color={colors.primary}
           />
         </View>
         <View style={styles.info}>
-          <Text style={styles.accountName}>@{accountName}</Text>
-          {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+          <Text style={[styles.accountName, { color: colors.text }]}>@{accountName}</Text>
+          {subtitle && <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>}
         </View>
         <View style={[styles.status, { backgroundColor: getStatusColor() }]}>
           <MaterialCommunityIcons
@@ -72,14 +75,14 @@ export function ListItem({
         </View>
       </View>
       {status === 'connected' && language && (
-        <View style={styles.languageContainer}>
+        <View style={[styles.languageContainer, { borderTopColor: colors.border }]}>
           <MaterialCommunityIcons
             name="translate"
             size={14}
-            color="#2171C1"
+            color={colors.primary}
             style={styles.languageIcon}
           />
-          <Text style={styles.languageText}>{language}</Text>
+          <Text style={[styles.languageText, { color: colors.primary }]}>{language}</Text>
         </View>
       )}
     </TouchableOpacity>
@@ -88,20 +91,8 @@ export function ListItem({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 12,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
   },
   content: {
     flexDirection: 'row',
@@ -111,7 +102,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -122,11 +112,9 @@ const styles = StyleSheet.create({
   accountName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
   },
   subtitle: {
     fontSize: 12,
-    color: '#6B7280',
     marginTop: 2,
   },
   status: {
@@ -144,14 +132,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
   },
   languageIcon: {
     marginRight: 4,
   },
   languageText: {
     fontSize: 12,
-    color: '#2171C1',
     fontWeight: '500',
   },
 }); 
