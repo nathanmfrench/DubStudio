@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { TierBadge } from '../components/TierBadge';
+import { useTier } from '../contexts/TierContext';
 
 interface OverallMetrics {
   totalFollowers: number;
@@ -49,9 +51,10 @@ const mockAccounts: AccountMetrics[] = [
   },
 ];
 
+const { width } = Dimensions.get('window');
+
 export function AnalyticsScreen() {
-  const [selectedTimeRange, setSelectedTimeRange] = useState<'7d' | '30d' | '90d'>('7d');
-  const [selectedMetric, setSelectedMetric] = useState<'followers' | 'engagement' | 'reach'>('followers');
+  const { currentTier } = useTier();
   const [currentPage, setCurrentPage] = useState(1);
   const flatListRef = useRef<FlatList>(null);
 
@@ -141,33 +144,17 @@ export function AnalyticsScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>Analytics</Text>
-          <View style={styles.timeRangeSelector}>
-            {(['7d', '30d', '90d'] as const).map((range) => (
-              <TouchableOpacity
-                key={`time-range-${range}`}
-                style={[
-                  styles.timeRangeButton,
-                  selectedTimeRange === range && styles.timeRangeButtonSelected,
-                ]}
-                onPress={() => setSelectedTimeRange(range)}
-              >
-                <Text
-                  style={[
-                    styles.timeRangeText,
-                    selectedTimeRange === range && styles.timeRangeTextSelected,
-                  ]}
-                >
-                  {range}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.headerLeft}>
+            <Text style={styles.title}>Analytics</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <TierBadge tier={currentTier} />
           </View>
         </View>
 
         <View style={styles.overallMetrics}>
           <Text style={styles.sectionTitle}>Overall Performance</Text>
-          <View style={styles.metricsGrid}>
+          <View style={styles.metricsContainer}>
             {renderMetricCard(
               'Total Followers',
               formatNumber(mockOverallMetrics.totalFollowers),
@@ -196,9 +183,12 @@ export function AnalyticsScreen() {
         </View>
 
         <View style={styles.accountsSection}>
-          <View style={styles.accountsScrollView}>
+          <Text style={styles.sectionTitle}>Account Analytics</Text>
+          <ScrollView 
+            style={styles.accountsScrollView}
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.accountsHeader}>
-              <Text style={styles.sectionTitle}>Account Analytics</Text>
               <Text style={styles.pageIndicator}>{currentPage}/{mockAccounts.length}</Text>
             </View>
             <FlatList
@@ -214,7 +204,7 @@ export function AnalyticsScreen() {
               decelerationRate="fast"
               contentContainerStyle={styles.accountsContent}
             />
-          </View>
+          </ScrollView>
         </View>
       </View>
     </SafeAreaView>
@@ -231,47 +221,25 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 16,
-    paddingBottom: 0,
+    paddingBottom: 8,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#2171C1',
-    marginBottom: 16,
-  },
-  timeRangeSelector: {
-    flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    padding: 4,
-  },
-  timeRangeButton: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 6,
-  },
-  timeRangeButtonSelected: {
-    backgroundColor: '#FFFFFF',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  timeRangeText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#6B7280',
-  },
-  timeRangeTextSelected: {
     color: '#2171C1',
   },
   overallMetrics: {
@@ -299,7 +267,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     width: '100%',
   },
-  metricsGrid: {
+  metricsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 16,

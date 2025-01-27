@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Platform, Alert, TextInput, Linking, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
+import { TierBadge } from '../components/TierBadge';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ListItem } from '../components/ListItem';
@@ -10,6 +11,7 @@ import { facebookService } from '../services/FacebookService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useTier } from '../contexts/TierContext';
 
 interface VideoSelection {
   uri: string;
@@ -201,6 +203,7 @@ const formatFileSize = (bytes: number): string => {
 type NavigationProps = NativeStackNavigationProp<any>;
 
 export function UploadScreen() {
+  const { currentTier } = useTier();
   const [selectedVideo, setSelectedVideo] = useState<VideoSelection | null>(null);
   const [caption, setCaption] = useState('');
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
@@ -541,7 +544,12 @@ export function UploadScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>Upload</Text>
+          <View style={styles.headerLeft}>
+            <Text style={styles.title}>Upload</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <TierBadge tier={currentTier} />
+          </View>
         </View>
         
         {!selectedVideo ? (
@@ -676,6 +684,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     paddingBottom: 8,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   title: {
     fontSize: 24,

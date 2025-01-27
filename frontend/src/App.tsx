@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -6,10 +6,13 @@ import { Amplify } from 'aws-amplify';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { Settings } from 'react-native-fbsdk-next';
 import { amplifyConfig, checkAuthState } from './config/aws-config';
+import * as SplashScreen from 'expo-splash-screen';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 // Contexts and Services
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { facebookService } from '../src/services/FacebookService';
+import { TierProvider } from './contexts/TierContext';
 
 // Utilities and Config
 import { loadFonts } from '../src/utils/loadFonts';
@@ -21,8 +24,11 @@ import { AppNavigator } from '../src/navigation/AppNavigator';
 // Initialize Amplify with the configuration
 Amplify.configure(amplifyConfig);
 
+SplashScreen.preventAutoHideAsync();
+
 export default function App() {
-  const [appReady, setAppReady] = useState(false);
+  const [appIsReady, setAppIsReady] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -51,14 +57,21 @@ export default function App() {
       } catch (error) {
         console.error('Initialization error:', error);
       } finally {
-        setAppReady(true);
+        setAppIsReady(true);
       }
     };
 
     initializeApp();
   }, []);
 
-  if (!appReady) {
+  const onLayoutRootView = useCallback(async () => {
+    if (appIsReady) {
+      await SplashScreen.hideAsync();
+      setTimeout(() => setShowSplash(false), 500);
+    }
+  }, [appIsReady]);
+
+  if (!appIsReady) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" />
@@ -69,9 +82,15 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NavigationContainer>
-          <AppNavigator />
-        </NavigationContainer>
+        <TierProvider>
+          <ThemeProvider>
+            <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+              <NavigationContainer>
+                <AppNavigator />
+              </NavigationContainer>
+            </View>
+          </ThemeProvider>
+        </TierProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

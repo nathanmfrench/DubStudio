@@ -19,6 +19,8 @@ import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { facebookService } from '../services/FacebookService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TierBadge } from '../components/TierBadge';
+import { useTier } from '../contexts/TierContext';
 
 interface ConnectedAccount {
   platform: 'instagram';
@@ -135,6 +137,7 @@ function BackgroundPattern() {
 }
 
 export function AccountsScreen() {
+  const { currentTier } = useTier();
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -248,42 +251,57 @@ export function AccountsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <ScrollView style={styles.scrollContent}>
-          <View style={styles.header}>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
             <Text style={styles.title}>Accounts</Text>
           </View>
-
+          <View style={styles.headerRight}>
+            <TierBadge tier={currentTier} />
+          </View>
+        </View>
+        <ScrollView style={styles.scrollContent}>
           <View style={styles.accountsContainer}>
-            {connectedAccounts.length > 0 ? (
-              connectedAccounts.map((account, index) => (
-                <View key={account.userId || index} style={styles.accountCard}>
-                  <ListItem
-                    accountName={account.username}
-                    subtitle={`Connected via ${account.pageName}`}
-                    status="connected"
+            {connectedAccounts.length === 0 ? (
+              <View style={styles.noAccountsContainer}>
+                <Text style={styles.noAccountsText}>No connected accounts</Text>
+                <TouchableOpacity
+                  style={styles.connectButton}
+                  onPress={handleConnectFacebook}
+                >
+                  <MaterialCommunityIcons
+                    name="facebook"
+                    size={24}
+                    color="#FFFFFF"
                   />
-                </View>
-              ))
-            ) : (
-              <View style={styles.emptyState}>
-                <MaterialCommunityIcons name="account-plus" size={48} color="#9CA3AF" />
-                <Text style={styles.emptyStateText}>No connected accounts</Text>
-                <Text style={styles.emptyStateSubtext}>
-                  Connect your Facebook page with Instagram business accounts to get started
-                </Text>
+                  <Text style={styles.connectButtonText}>Connect Facebook</Text>
+                </TouchableOpacity>
               </View>
+            ) : (
+              <>
+                {connectedAccounts.map((account, index) => (
+                  <View key={account.userId || index} style={styles.accountCard}>
+                    <ListItem
+                      accountName={account.username}
+                      subtitle={`Connected via ${account.pageName}`}
+                      status="connected"
+                    />
+                  </View>
+                ))}
+                <TouchableOpacity
+                  style={styles.addAccountButton}
+                  onPress={handleConnectFacebook}
+                >
+                  <MaterialCommunityIcons
+                    name="account-plus"
+                    size={24}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.addAccountButtonText}>Add Account</Text>
+                </TouchableOpacity>
+              </>
             )}
           </View>
         </ScrollView>
-        
-        <View style={styles.bottomContainer}>
-          <Button
-            title={connectedAccounts.length > 0 ? "Add Account" : "Connect Facebook"}
-            leftIcon={connectedAccounts.length > 0 ? "account-plus" : "facebook"}
-            onPress={handleConnectFacebook}
-            loading={isLoading}
-          />
-        </View>
       </View>
     </SafeAreaView>
   );
@@ -305,7 +323,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    padding: 16,
+    paddingBottom: 8,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   title: {
     fontSize: 24,
@@ -334,28 +363,44 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  emptyState: {
+  noAccountsContainer: {
     alignItems: 'center',
     padding: 24,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     marginTop: 24,
   },
-  emptyStateText: {
+  noAccountsText: {
     fontSize: 16,
     fontWeight: '500',
     color: '#374151',
     marginTop: 12,
   },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginTop: 8,
+  connectButton: {
+    backgroundColor: '#2171C1',
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  bottomContainer: {
-    padding: 16,
-    backgroundColor: 'transparent',
+  connectButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  addAccountButton: {
+    backgroundColor: '#2171C1',
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addAccountButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   backgroundPattern: {
     position: 'absolute',
