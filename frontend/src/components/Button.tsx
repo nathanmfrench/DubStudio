@@ -1,18 +1,20 @@
 import React from 'react';
-import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { MaterialCommunityIcons as IconType } from '@expo/vector-icons';
 
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'text';
+  variant?: 'primary' | 'secondary' | 'outline';
   size?: 'small' | 'medium' | 'large';
   disabled?: boolean;
   loading?: boolean;
   fullWidth?: boolean;
   leftIcon?: keyof typeof IconType.glyphMap;
-  style?: StyleProp<ViewStyle>;
+  style?: ViewStyle;
+  textStyle?: TextStyle;
 }
 
 export function Button({
@@ -25,16 +27,21 @@ export function Button({
   fullWidth = false,
   leftIcon,
   style,
+  textStyle
 }: ButtonProps) {
+  const { colors, isDarkMode } = useTheme();
+
   const getBackgroundColor = () => {
-    if (disabled) return '#E5E7EB';
+    if (disabled) return isDarkMode ? '#374151' : '#E5E7EB';
     switch (variant) {
+      case 'primary':
+        return colors.primary;
       case 'secondary':
-        return 'transparent';
-      case 'text':
+        return colors.primaryLight;
+      case 'outline':
         return 'transparent';
       default:
-        return '#2171C1';
+        return colors.primary;
     }
   };
 
@@ -49,12 +56,12 @@ export function Button({
   };
 
   const getTextColor = () => {
-    if (disabled) return '#9CA3AF';
+    if (disabled) return isDarkMode ? '#9CA3AF' : '#6B7280';
     switch (variant) {
-      case 'primary':
-        return '#FFFFFF';
+      case 'outline':
+        return colors.primary;
       default:
-        return '#2171C1';
+        return '#FFFFFF';
     }
   };
 
@@ -86,7 +93,7 @@ export function Button({
         styles.button,
         {
           backgroundColor: getBackgroundColor(),
-          borderColor: getBorderColor(),
+          borderColor: variant === 'outline' ? colors.primary : 'transparent',
           ...getPadding(),
         },
         fullWidth && styles.fullWidth,
@@ -115,6 +122,7 @@ export function Button({
                 color: getTextColor(),
                 fontSize: getFontSize(),
               },
+              textStyle
             ]}
           >
             {title}

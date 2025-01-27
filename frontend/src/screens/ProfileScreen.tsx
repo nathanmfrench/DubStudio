@@ -140,21 +140,21 @@ export function ProfileScreen() {
     onPress?: () => void
   ) => (
     <TouchableOpacity
-      style={styles.settingsItem}
+      style={[styles.settingsItem, { borderBottomColor: colors.border }]}
       onPress={onPress}
       disabled={title === 'Sign Out' && isSigningOut}
     >
       <View style={styles.settingsItemLeft}>
-        <MaterialCommunityIcons name={icon} size={24} color="#6B7280" />
+        <MaterialCommunityIcons name={icon} size={24} color={colors.textSecondary} />
         <View style={styles.settingsItemText}>
-          <Text style={styles.settingsItemTitle}>{title}</Text>
-          <Text style={styles.settingsItemSubtitle}>{subtitle}</Text>
+          <Text style={[styles.settingsItemTitle, { color: colors.text }]}>{title}</Text>
+          <Text style={[styles.settingsItemSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
         </View>
       </View>
       {title === 'Sign Out' && isSigningOut ? (
-        <ActivityIndicator color="#6B7280" />
+        <ActivityIndicator color={colors.textSecondary} />
       ) : (
-        <MaterialCommunityIcons name="chevron-right" size={24} color="#6B7280" />
+        <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textSecondary} />
       )}
     </TouchableOpacity>
   );
@@ -171,13 +171,13 @@ export function ProfileScreen() {
           d={`M0 0 
              C ${width * 0.3} 50, ${width * 0.7} 20, ${width} 50 
              L${width} 0 Z`}
-          fill="rgba(33, 113, 193, 0.1)"
+          fill={isDarkMode ? 'rgba(96, 165, 250, 0.1)' : 'rgba(33, 113, 193, 0.1)'}
         />
         <Path
           d={`M0 0 
              C ${width * 0.4} 30, ${width * 0.6} 40, ${width} 20 
              L${width} 0 Z`}
-          fill="rgba(33, 113, 193, 0.15)"
+          fill={isDarkMode ? 'rgba(96, 165, 250, 0.15)' : 'rgba(33, 113, 193, 0.15)'}
         />
       </Svg>
     </View>
@@ -187,27 +187,30 @@ export function ProfileScreen() {
     const tier = tiers[tierKey];
     return (
       <TouchableOpacity 
-        style={styles.pricingTier}
+        style={[styles.pricingTier, {
+          backgroundColor: colors.cardBackground,
+          borderColor: colors.cardBorder
+        }]}
         onPress={() => handleUpgrade(tierKey)}
         activeOpacity={0.7}
       >
         <View style={styles.tierHeader}>
-          <MaterialCommunityIcons name={tier.icon as any} size={24} color="#2171C1" />
-          <Text style={styles.tierName}>{tier.name}</Text>
+          <MaterialCommunityIcons name={tier.icon as any} size={24} color={colors.primary} />
+          <Text style={[styles.tierName, { color: colors.text }]}>{tier.name}</Text>
         </View>
         <View style={styles.priceContainer}>
-          <Text style={styles.price}>${calculatePrice(tier.monthlyPrice)}</Text>
-          <Text style={styles.pricePeriod}>/month</Text>
+          <Text style={[styles.price, { color: colors.primary }]}>${calculatePrice(tier.monthlyPrice)}</Text>
+          <Text style={[styles.pricePeriod, { color: colors.textSecondary }]}>/month</Text>
         </View>
         <View style={styles.featuresContainer}>
           {tier.features.map((feature, index) => (
             <View key={index} style={styles.featureItem}>
-              <MaterialCommunityIcons name="check" size={16} color="#2171C1" />
-              <Text style={styles.featureText}>{feature}</Text>
+              <MaterialCommunityIcons name="check" size={16} color={colors.primary} />
+              <Text style={[styles.featureText, { color: colors.text }]}>{feature}</Text>
             </View>
           ))}
         </View>
-        <Text style={styles.goalText}>{tier.goal}</Text>
+        <Text style={[styles.goalText, { color: colors.textSecondary }]}>{tier.goal}</Text>
       </TouchableOpacity>
     );
   };
@@ -220,26 +223,42 @@ export function ProfileScreen() {
       onRequestClose={() => setShowSettings(false)}
     >
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Settings</Text>
+        <View style={[styles.modalContent, { 
+          backgroundColor: colors.background,
+          borderTopColor: colors.border 
+        }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Settings</Text>
             <TouchableOpacity 
               onPress={() => setShowSettings(false)}
               style={styles.closeButton}
             >
-              <MaterialCommunityIcons name="close" size={24} color="#6B7280" />
+              <MaterialCommunityIcons name="close" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          {renderSettingsItem('account-cog', 'Account Settings', 'Privacy, security, and more')}
-          {renderSettingsItem('help-circle-outline', 'Help & Support', 'Get help with DubStudio')}
           {renderSettingsItem(
-            isDarkMode ? 'weather-night' : 'white-balance-sunny',
+            'account-cog',
+            'Account Settings',
+            'Privacy, security, and more'
+          )}
+          {renderSettingsItem(
+            'help-circle-outline',
+            'Help & Support',
+            'Get help with DubStudio'
+          )}
+          {renderSettingsItem(
+            'theme-light-dark',
             'Dark Mode',
             'Toggle dark theme',
-            () => toggleTheme()
+            toggleTheme
           )}
-          {renderSettingsItem('logout', 'Sign Out', 'Sign out of your account', handleSignOut)}
+          {renderSettingsItem(
+            'logout',
+            'Sign Out',
+            'Sign out of your account',
+            handleSignOut
+          )}
         </View>
       </View>
     </Modal>
