@@ -210,29 +210,24 @@ export function AnalyticsScreen() {
           borderColor: colors.cardBorder
         }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Account Analytics</Text>
-          <ScrollView 
-            style={styles.accountsScrollView}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.accountsHeader}>
-              <Text style={[styles.pageIndicator, { color: colors.textSecondary }]}>
-                {currentPage}/{mockAccounts.length}
-              </Text>
-            </View>
-            <FlatList
-              ref={flatListRef}
-              data={mockAccounts}
-              renderItem={renderAccountCard}
-              keyExtractor={(item) => item.id}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onScroll={handleScroll}
-              snapToAlignment="center"
-              decelerationRate="fast"
-              contentContainerStyle={styles.accountsContent}
-            />
-          </ScrollView>
+          <View style={styles.accountsHeader}>
+            <Text style={[styles.pageIndicator, { color: colors.textSecondary }]}>
+              {currentPage}/{mockAccounts.length}
+            </Text>
+          </View>
+          <FlatList
+            ref={flatListRef}
+            data={mockAccounts}
+            renderItem={renderAccountCard}
+            keyExtractor={(item) => item.id}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={handleScroll}
+            snapToAlignment="center"
+            decelerationRate="fast"
+            contentContainerStyle={styles.accountsContent}
+          />
         </View>
       </View>
     </SafeAreaView>
@@ -350,33 +345,19 @@ const styles = StyleSheet.create({
   accountsSection: {
     flex: 1,
     marginHorizontal: 16,
-  },
-  accountsScrollView: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
     padding: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+    borderRadius: 16,
+    borderWidth: 1,
   },
   accountsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 1,
+    marginBottom: 16,
   },
   pageIndicator: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280',
     position: 'absolute',
     right: 0,
     top: 0,
@@ -386,21 +367,11 @@ const styles = StyleSheet.create({
   },
   accountCard: {
     width: Dimensions.get('window').width - 64,
-    backgroundColor: '#F9FAFB',
     borderRadius: 12,
     padding: 16,
     paddingTop: 24,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+    borderWidth: 1,
+    marginRight: 16,
   },
   accountHeader: {
     flexDirection: 'row',
