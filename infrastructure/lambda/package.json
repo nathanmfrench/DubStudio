@@ -1,29 +1,6 @@
 {
-  "name": "lambda",
-  "version": "1.0.0",
-  "description": "Lambda functions for video processing",
-  "scripts": {
-    "clean": "rm -rf dist && rm -rf src/**/*.js src/**/*.js.map src/**/*.d.ts",
-    "build": "npm run clean && npx tsc && tsc",
-    "prebuild": "npm install",
-    "predeploy": "npm run build"
-  },
-  "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.0.0",
-    "@aws-sdk/client-lambda": "^3.0.0",
-    "@aws-sdk/client-s3": "^3.0.0",
-    "@aws-sdk/lib-dynamodb": "^3.0.0",
-    "@aws-sdk/s3-request-presigner": "^3.0.0",
-    "@aws-sdk/util-dynamodb": "^3.0.0",
-    "http-errors": "^2.0.0"
-  },
-  "devDependencies": {
-    "@types/aws-lambda": "^8.10.92",
-    "@types/http-errors": "^2.0.0",
-    "@types/node": "^18.0.0",
-    "typescript": "^5.3.3"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "name": "lambda",
+    "version": "1.0.0",
+    "private": true,
+    "workspace": true
   }
-}

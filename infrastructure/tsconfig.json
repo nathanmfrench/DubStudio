@@ -1,11 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ES2018",
-    "module": "commonjs",
-    "lib": [
-      "es2018",
-      "dom"
-    ],
+    "target": "ES2022",
+    "module": "NodeNext",
+    "lib": ["ES2022"],
     "declaration": true,
     "strict": true,
     "noImplicitAny": true,
@@ -21,17 +18,25 @@
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
     "typeRoots": [
-      "./node_modules/@types"
+      "./node_modules/@types",
+      "./lambda/node_modules/@types"
     ],
-    "outDir": "dist",
+    "outDir": "./lib",
     "rootDir": ".",
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "@lambda/*": ["./lambda/src/*"]
+    }
   },
-  "include": ["bin/**/*", "lib/**/*"],
+  "include": [
+    "bin/**/*",
+    "lib/**/*",
+    "lambda/src/**/*"
+  ],
   "exclude": [
     "node_modules",
-    "dist",
-    "cdk.out",
-    "lambda"
+    "cdk.out"
   ]
 }
