@@ -2,5 +2,13 @@
     "name": "lambda",
     "version": "1.0.0",
     "private": true,
-    "workspace": true
-  }
+    "workspace": true,
+    "scripts": {
+        "build": "tsc -p src/tsconfig.json"
+    },
+    "devDependencies": {
+        "@types/aws-lambda": "^8.10.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0"
+    }
+}

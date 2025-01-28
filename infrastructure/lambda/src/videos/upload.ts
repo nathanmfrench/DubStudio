@@ -10,7 +10,7 @@ const ddbClient = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(ddbClient);
 
 // Match environment variable names with infrastructure stack
-const TABLE_NAME = process.env.TABLE_NAME!;
+const TABLE_NAME = process.env.VIDEOS_TABLE_NAME!;
 const BUCKET_NAME = process.env.BUCKET_NAME!;
 
 interface UploadRequestBody {

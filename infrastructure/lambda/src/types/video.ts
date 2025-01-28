@@ -1,0 +1,48 @@
+export interface VideoMetadata {
+  userId: string;
+  videoId: string;
+  fileName: string;
+  status: VideoStatus;
+  createdAt: string;
+  updatedAt: string;
+  error?: string;
+  sourceLanguage?: string;
+  targetLanguages?: string[];
+  dubbingIds?: { [key: string]: string }; // language -> dubbingId mapping
+}
+
+export type VideoStatus = 
+  | 'pending_upload'
+  | 'uploaded'
+  | 'processing'
+  | 'completed'
+  | 'failed';
+
+export interface ProcessVideoRequest {
+  sourceLanguage: string;
+  targetLanguages: string[];
+  caption?: boolean;
+}
+
+export interface UploadVideoRequest {
+  fileName: string;
+  fileType: string;
+}
+
+export interface UploadVideoResponse {
+  uploadUrl: string;
+  videoId: string;
+  key: string;
+}
+
+export interface VideoStatusResponse {
+  videoId: string;
+  status: VideoStatus;
+  error?: string;
+  dubbingProgress?: {
+    [language: string]: {
+      status: string;
+      progress: number;
+    };
+  };
+} 

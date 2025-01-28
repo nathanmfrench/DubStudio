@@ -4,6 +4,15 @@ If someone is using a basic accouitn and want to upgrade, what happens to their 
 there is a different config setup for expo-fbsdk-next android and ios 
 will need to update bundle ID, put domains in the meta developer console
 
+The callbackUrls in the Cognito User Pool Client is set to ['exp://localhost:19000/--/*'] with a comment "Update with your Expo callback URLs". This might need to be updated for production.
+The Python Lambda's code property points to the same directory as its layer (../lambda/python). This might be intentional, but typically the layer would point to a dependencies directory and the code would point to a source directory.
+The allowedOrigins: ['*'] in the S3 bucket CORS settings has a comment "Restrict this in production" - this is a reminder that needs to be addressed before production deployment.
+
+
+
+
+
+
 
 Let me explain what happened:
 
