@@ -1,6 +1,6 @@
 # DubStudio
 
-If someone is using a basic accouitn and want to upgrade, what happens to their account? How many videos do they get?
+If someone is using a basic account and want to upgrade, what happens to their account? How many videos do they get?
 there is a different config setup for expo-fbsdk-next android and ios 
 will need to update bundle ID, put domains in the meta developer console
 
