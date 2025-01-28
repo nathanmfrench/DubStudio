@@ -1,4 +1,4 @@
-I'll provide an in-depth explanation of the CDK bundling process, specifically focusing on how it works in your infrastructure stack. Let's break this down into several key components:
+How CDK bundling works in my stack.
 
 1. **Overview of CDK Bundling**
 The bundling process in your stack is specifically used for the Python Lambda layer (`dubbingLayer`). Here's the relevant code:
