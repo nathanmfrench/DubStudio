@@ -4,7 +4,7 @@
   "description": "Lambda functions for video processing",
   "scripts": {
     "clean": "rm -rf dist && rm -rf src/**/*.js src/**/*.js.map src/**/*.d.ts",
-    "build": "npm run clean && tsc",
+    "build": "npm run clean && npx tsc && tsc",
     "prebuild": "npm install",
     "predeploy": "npm run build"
   },

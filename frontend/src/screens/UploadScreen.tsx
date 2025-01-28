@@ -15,6 +15,10 @@ import { useTier } from '../contexts/TierContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { FlingGestureHandler, Directions, State, FlingGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
+import { fetchAuthSession } from 'aws-amplify/auth';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import { config } from '../config/env';
+import NetInfo from '@react-native-community/netinfo';
 
 interface VideoSelection {
   name: string;
@@ -88,6 +92,23 @@ interface UploadState {
   deliveryOption: 'post' | 'schedule' | 'download' | '';
   scheduledDate?: Date;
 }
+
+interface DubbingProgress {
+  status: 'idle' | 'starting' | 'uploading' | 'processing' | 'completed' | 'failed';
+  progress: number;
+  error: string | null;
+  languageProgress: Record<string, {
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    progress: number;
+  }>;
+}
+
+const initialDubbingProgress: DubbingProgress = {
+  status: 'idle',
+  progress: 0,
+  error: null,
+  languageProgress: {}
+};
 
 const AVAILABLE_LANGUAGES = [
   { code: 'en', name: 'English' },
@@ -215,8 +236,26 @@ const formatFileSize = (bytes: number): string => {
 
 type NavigationProps = NativeStackNavigationProp<any>;
 
+const API_BASE_URL = config.api.baseUrl;
+const elevenLabsApiKey = config.elevenlabs.apiKey;
+
+// Add new function for getting auth token
+const getAuthToken = async (): Promise<string> => {
+  try {
+    const session = await fetchAuthSession();
+    const token = session.tokens?.idToken?.toString();
+    if (!token) {
+      throw new Error('No authentication token available');
+    }
+    return token;
+  } catch (error) {
+    console.error('Authentication error:', error);
+    throw new Error('Failed to authenticate. Please try again.');
+  }
+};
+
 export function UploadScreen() {
-  const { currentTier } = useTier();
+  const { currentTierData } = useTier();
   const { colors, isDarkMode } = useTheme();
   const [selectedVideo, setSelectedVideo] = useState<VideoSelection | null>(null);
   const [useDefaultThumbnail, setUseDefaultThumbnail] = useState(true);
@@ -230,6 +269,7 @@ export function UploadScreen() {
     deliveryOption: '',
   });
   const [languageSearch, setLanguageSearch] = useState('');
+  const [dubbingProgress, setDubbingProgress] = useState<DubbingProgress>(initialDubbingProgress);
   const navigation = useNavigation<NavigationProps>();
 
   useEffect(() => {
@@ -637,11 +677,317 @@ export function UploadScreen() {
     );
   };
 
+  const uploadVideo = async (uri: string, type: string, name: string): Promise<string> => {
+    try {
+      const token = await getAuthToken();
+      
+      // Get upload URL from backend
+      const response = await fetch(`${API_BASE_URL}/videos/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          fileName: name,
+          fileType: type,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to get upload URL');
+      }
+
+      const { uploadUrl, videoId } = await response.json();
+
+      // Upload video to S3
+      const blob = await fetch(uri).then(r => r.blob());
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: blob,
+        headers: {
+          'Content-Type': type,
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload video to storage');
+      }
+
+      return videoId;
+    } catch (error) {
+      console.error('Error uploading video:', error);
+      throw error;
+    }
+  };
+
+  const startProcessing = async (videoId: string) => {
+    try {
+      const token = await getAuthToken();
+      
+      const response = await fetch(`${API_BASE_URL}/videos/${videoId}/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'xi-api-key': elevenLabsApiKey
+        },
+        body: JSON.stringify({
+          sourceLanguage: uploadState.sourceLanguage,
+          targetLanguages: uploadState.targetLanguages,
+          caption: uploadState.caption,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to start processing');
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error('Error starting processing:', error);
+      throw error;
+    }
+  };
+
+  const checkStatus = async (videoId: string) => {
+    try {
+      const token = await getAuthToken();
+      
+      const response = await fetch(`${API_BASE_URL}/videos/${videoId}/status`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to get status');
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error('Error checking status:', error);
+      throw error;
+    }
+  };
+
+  const startDubbing = async () => {
+    if (!selectedVideo) return;
+
+    // Check network connectivity
+    const networkState = await NetInfo.fetch();
+    if (!networkState.isConnected) {
+      Alert.alert('No Connection', 'Please check your internet connection and try again.');
+      return;
+    }
+
+    // Validate minimum requirements
+    if (uploadState.targetLanguages.length === 0) {
+      Alert.alert('No Languages Selected', 'Please select at least one target language.');
+      return;
+    }
+
+    // Check available credits
+    const requiredCredits = uploadState.targetLanguages.length;
+    if (currentTierData.availableCredits < requiredCredits) {
+      Alert.alert(
+        'Insufficient Credits',
+        `You need ${requiredCredits} credits to generate dubs in ${uploadState.targetLanguages.length} languages. Please upgrade your plan or purchase more credits.`
+      );
+      return;
+    }
+
+    setDubbingProgress(prev => ({
+      ...prev,
+      status: 'starting',
+      progress: 0,
+      error: null,
+      languageProgress: uploadState.targetLanguages.reduce((acc, lang) => ({
+        ...acc,
+        [lang]: { status: 'pending', progress: 0 }
+      }), {})
+    }));
+
+    try {
+      // Get auth token
+      const token = await getAuthToken();
+
+      // Start upload
+      setDubbingProgress(prev => ({
+        ...prev,
+        status: 'uploading',
+        progress: 0
+      }));
+
+      
+      // Get upload URL
+      const uploadResponse = await fetch(`${API_BASE_URL}/videos/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          fileName: selectedVideo.name,
+          fileType: selectedVideo.type
+        })
+      });
+
+      if (!uploadResponse.ok) {
+        const error = await uploadResponse.json();
+        throw new Error(error.message || 'Failed to get upload URL');
+      }
+
+      const { uploadUrl, videoId } = await uploadResponse.json();
+
+      // Upload to S3 with progress tracking and retry logic
+      let uploadAttempts = 0;
+      const maxUploadAttempts = 3;
+
+      const uploadWithRetry = async (): Promise<void> => {
+        try {
+          const blob = await fetch(selectedVideo.uri).then(r => r.blob());
+          const xhr = new XMLHttpRequest();
+          
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+              const progress = Math.round((event.loaded / event.total) * 100);
+              setDubbingProgress(prev => ({
+                ...prev,
+                progress
+              }));
+            }
+          };
+
+          await new Promise((resolve, reject) => {
+            xhr.onload = () => xhr.status === 200 ? resolve(null) : reject(new Error('Upload failed'));
+            xhr.onerror = () => reject(new Error('Upload failed'));
+            xhr.open('PUT', uploadUrl);
+            xhr.setRequestHeader('Content-Type', selectedVideo.type);
+            xhr.send(blob);
+          });
+        } catch (error) {
+          if (uploadAttempts < maxUploadAttempts) {
+            uploadAttempts++;
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, uploadAttempts) * 1000));
+            return uploadWithRetry();
+          }
+          throw error;
+        }
+      };
+
+      await uploadWithRetry();
+
+      // Start processing
+      setDubbingProgress(prev => ({
+        ...prev,
+        status: 'processing',
+        progress: 0
+      }));
+
+      const processResponse = await fetch(`${API_BASE_URL}/videos/${videoId}/process`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'xi-api-key': elevenLabsApiKey
+        },
+        body: JSON.stringify({
+          sourceLanguage: uploadState.sourceLanguage,
+          targetLanguages: uploadState.targetLanguages,
+          caption: uploadState.caption,
+          translateCaptions: uploadState.translateCaptions
+        })
+      });
+
+      if (!processResponse.ok) {
+        const error = await processResponse.json();
+        throw new Error(error.message || 'Failed to start processing');
+      }
+
+      // Poll for status with exponential backoff
+      let retryCount = 0;
+      const maxRetries = 3;
+      const pollStatus = async () => {
+        try {
+          // Refresh token for long-running operations
+          const freshToken = await getAuthToken();
+          
+          const statusResponse = await fetch(`${API_BASE_URL}/videos/${videoId}/status`, {
+            headers: {
+              'Authorization': `Bearer ${freshToken}`
+            }
+          });
+
+          if (!statusResponse.ok) {
+            throw new Error('Failed to get status');
+          }
+
+          const status = await statusResponse.json();
+          
+          if (status.status === 'completed') {
+            setDubbingProgress(prev => ({
+              ...prev,
+              status: 'completed',
+              progress: 100,
+              languageProgress: status.languageProgress || prev.languageProgress
+            }));
+            return;
+          }
+
+          if (status.status === 'failed') {
+            throw new Error(status.error || 'Processing failed');
+          }
+
+          // Update progress
+          setDubbingProgress(prev => ({
+            ...prev,
+            status: status.status,
+            progress: status.progress || prev.progress,
+            languageProgress: status.languageProgress || prev.languageProgress
+          }));
+
+          // Continue polling with delay
+          setTimeout(pollStatus, 2000);
+        } catch (error) {
+          if (retryCount < maxRetries) {
+            retryCount++;
+            setTimeout(pollStatus, Math.pow(2, retryCount) * 1000);
+          } else {
+            setDubbingProgress(prev => ({
+              ...prev,
+              status: 'failed',
+              error: error instanceof Error ? error.message : 'An unknown error occurred'
+            }));
+          }
+        }
+      };
+
+      // Start polling
+      pollStatus();
+    } catch (error) {
+      console.error('Dubbing error:', error);
+      setDubbingProgress(prev => ({
+        ...prev,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'An unknown error occurred'
+      }));
+    }
+  };
+
   const renderStep3 = () => {
     if (!selectedVideo) return null;
 
+    const videoCreditsNeeded = uploadState.targetLanguages.length;
+    const isProcessing = dubbingProgress.status === 'processing' || dubbingProgress.status === 'uploading';
+
     return (
       <>
+        {renderVideoPreview()}
+        
         <View style={[styles.inputContainer, {
           backgroundColor: colors.surface,
           borderColor: colors.cardBorder
@@ -695,38 +1041,54 @@ export function UploadScreen() {
               </TouchableOpacity>
             ))}
           </ScrollView>
-        </View>
 
-        <View style={[styles.inputContainer, {
-          backgroundColor: colors.surface,
-          borderColor: colors.cardBorder
-        }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Translation Options</Text>
-          
-          <View style={styles.optionContainer}>
-            <View style={styles.optionRow}>
-              <Text style={[styles.optionText, { color: colors.text }]}>
-                Translate captions to target languages
-              </Text>
-              <Switch
-                value={uploadState.translateCaptions}
-                onValueChange={(value) => setUploadState(prev => ({
-                  ...prev,
-                  translateCaptions: value
-                }))}
-                trackColor={{ false: isDarkMode ? '#374151' : '#E5E7EB', true: colors.primaryLight }}
-                thumbColor={uploadState.translateCaptions ? colors.primary : (isDarkMode ? '#9CA3AF' : '#6B7280')}
-              />
-            </View>
+          <View style={[styles.creditNotice, { backgroundColor: colors.cardBackground }]}>
+            <MaterialCommunityIcons name="information" size={20} color={colors.primary} />
+            <Text style={[styles.creditText, { color: colors.text }]}>
+              This will consume {videoCreditsNeeded} video {videoCreditsNeeded === 1 ? 'credit' : 'credits'}
+            </Text>
           </View>
-        </View>
 
-        <View style={styles.footer}>
+          {dubbingProgress.status !== 'idle' && (
+            <View style={styles.progressContainer}>
+              <View style={styles.progressHeader}>
+                <Text style={[styles.progressTitle, { color: colors.text }]}>
+                  {dubbingProgress.status === 'uploading' ? 'Uploading Video...' :
+                   dubbingProgress.status === 'processing' ? 'Generating Dubs...' :
+                   dubbingProgress.status === 'completed' ? 'Dubbing Complete!' :
+                   'Dubbing Failed'}
+                </Text>
+                <Text style={[styles.progressPercent, { color: colors.primary }]}>
+                  {Math.round(dubbingProgress.progress)}%
+                </Text>
+              </View>
+              
+              <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
+                <View 
+                  style={[
+                    styles.progressFill,
+                    { 
+                      backgroundColor: colors.primary,
+                      width: `${dubbingProgress.progress}%`,
+                    }
+                  ]} 
+                />
+              </View>
+
+              {dubbingProgress.error && (
+                <Text style={[styles.errorText, { color: colors.error }]}>
+                  {dubbingProgress.error}
+                </Text>
+              )}
+            </View>
+          )}
+
           <Button
-            title="Continue"
-            onPress={goToNextStep}
+            title={isProcessing ? "Processing..." : "Generate Dubs"}
+            onPress={startDubbing}
             variant="primary"
-            disabled={uploadState.targetLanguages.length === 0}
+            leftIcon="video-plus"
+            disabled={uploadState.targetLanguages.length === 0 || isProcessing}
           />
         </View>
       </>
@@ -958,71 +1320,73 @@ export function UploadScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <FlingGestureHandler
-          direction={Directions.RIGHT}
-          onHandlerStateChange={handleSwipeRight}
-        >
-          <View style={styles.content}>
-            <View style={styles.header}>
-              <View style={styles.headerLeft}>
-                {currentStep > 1 && (
-                  <TouchableOpacity
-                    onPress={goToPreviousStep}
-                    style={styles.backButton}
-                  >
-                    <MaterialCommunityIcons
-                      name="chevron-left"
-                      size={24}
-                      color={colors.primary}
-                    />
-                  </TouchableOpacity>
-                )}
-                <Text style={[styles.title, { color: colors.primary }]}>New Post</Text>
-                <Text style={[styles.stepIndicator, { color: colors.textSecondary }]}>
-                  Step {currentStep} of 5
-                </Text>
-              </View>
-              <View style={styles.headerRight}>
-                <TierBadge tier={currentTier} />
-              </View>
-            </View>
-
-            <ScrollView 
-              style={styles.scrollContent} 
-              contentContainerStyle={styles.scrollContainer}
-            >
-              {currentStep === 1 ? (
-                !selectedVideo ? (
-                  renderUploadArea()
-                ) : (
-                  <>
-                    {renderVideoPreview()}
-                    <View style={styles.footer}>
-                      <Button
-                        title="Continue"
-                        onPress={goToNextStep}
-                        variant="primary"
-                        disabled={!selectedVideo.thumbnailUri}
+    <ErrorBoundary>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <FlingGestureHandler
+            direction={Directions.RIGHT}
+            onHandlerStateChange={handleSwipeRight}
+          >
+            <View style={styles.content}>
+              <View style={styles.header}>
+                <View style={styles.headerLeft}>
+                  {currentStep > 1 && (
+                    <TouchableOpacity
+                      onPress={goToPreviousStep}
+                      style={styles.backButton}
+                    >
+                      <MaterialCommunityIcons
+                        name="chevron-left"
+                        size={24}
+                        color={colors.primary}
                       />
-                    </View>
-                  </>
-                )
-              ) : currentStep === 2 ? (
-                renderStep2()
-              ) : currentStep === 3 ? (
-                renderStep3()
-              ) : currentStep === 4 ? (
-                renderStep4()
-              ) : currentStep === 5 ? (
-                renderStep5()
-              ) : null}
-            </ScrollView>
-          </View>
-        </FlingGestureHandler>
-      </GestureHandlerRootView>
-    </SafeAreaView>
+                    </TouchableOpacity>
+                  )}
+                  <Text style={[styles.title, { color: colors.primary }]}>New Post</Text>
+                  <Text style={[styles.stepIndicator, { color: colors.textSecondary }]}>
+                    Step {currentStep} of 5
+                  </Text>
+                </View>
+                <View style={styles.headerRight}>
+                  <TierBadge tier={currentTierData.name} />
+                </View>
+              </View>
+
+              <ScrollView 
+                style={styles.scrollContent} 
+                contentContainerStyle={styles.scrollContainer}
+              >
+                {currentStep === 1 ? (
+                  !selectedVideo ? (
+                    renderUploadArea()
+                  ) : (
+                    <>
+                      {renderVideoPreview()}
+                      <View style={styles.footer}>
+                        <Button
+                          title="Continue"
+                          onPress={goToNextStep}
+                          variant="primary"
+                          disabled={!selectedVideo.thumbnailUri}
+                        />
+                      </View>
+                    </>
+                  )
+                ) : currentStep === 2 ? (
+                  renderStep2()
+                ) : currentStep === 3 ? (
+                  renderStep3()
+                ) : currentStep === 4 ? (
+                  renderStep4()
+                ) : currentStep === 5 ? (
+                  renderStep5()
+                ) : null}
+              </ScrollView>
+            </View>
+          </FlingGestureHandler>
+        </GestureHandlerRootView>
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 }
 
@@ -1253,5 +1617,60 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 4,
     marginRight: 8,
+  },
+  selectedLanguagesContainer: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  languageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  languageLabel: {
+    flex: 1,
+    fontSize: 16,
+  },
+  creditNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  creditText: {
+    flex: 1,
+    fontSize: 14,
+  },
+  progressContainer: {
+    marginBottom: 16,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  progressTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  progressPercent: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  progressBar: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  errorText: {
+    marginTop: 8,
+    fontSize: 14,
   },
 }); 

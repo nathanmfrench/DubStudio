@@ -6,6 +6,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -14,12 +15,8 @@ export class InfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // Define the ElevenLabs API key parameter
-    const elevenLabsApiKey = new cdk.CfnParameter(this, 'ElevenLabsApiKey', {
-      type: 'String',
-      description: 'API key for ElevenLabs',
-      noEcho: true // This ensures the key is not shown in logs
-    });
+    // Import the existing ElevenLabs API key secret
+    const elevenLabsSecret = secretsmanager.Secret.fromSecretNameV2(this, 'ElevenLabsSecret', 'ELEVENLABS_API_KEY');
 
     // Create VPC
     const vpc = new ec2.Vpc(this, 'DubStudioVPC', {
@@ -90,7 +87,7 @@ export class InfrastructureStack extends cdk.Stack {
         cachedInContext: false,
       }),
       securityGroup: ec2SecurityGroup,
-      keyName: 'dubstudio-test-key',
+      keyPair: ec2.KeyPair.fromKeyPairName(this, 'ExistingKeyPair', 'dubstudio-test-key'),
       role: new iam.Role(this, 'TestInstanceRole', {
         assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
         managedPolicies: [
@@ -193,11 +190,17 @@ export class InfrastructureStack extends cdk.Stack {
       command: [
         'bash', '-c',
         [
+          // Install Yarn globally
+          'npm install -g yarn',
+    
+          // Yarn commands
+          'yarn install --frozen-lockfile',
+          'yarn build',
           'cp -r /asset-input/dist/* /asset-output/',
           'cp -r /asset-input/node_modules /asset-output/',
           'cp /asset-input/package.json /asset-output/',
           'cd /asset-output',
-          'npm install --production'
+          'yarn install --production --ignore-scripts'
         ].join(' && ')
       ],
       workingDirectory: '/asset-input',
@@ -249,7 +252,7 @@ export class InfrastructureStack extends cdk.Stack {
       environment: {
         VIDEOS_TABLE_NAME: videosTable.tableName,
         BUCKET_NAME: bucket.bucketName,
-        ELEVENLABS_API_KEY: elevenLabsApiKey.valueAsString
+        ELEVENLABS_SECRET_NAME: elevenLabsSecret.secretName
       },
       timeout: cdk.Duration.minutes(15),
       memorySize: 1024
@@ -258,6 +261,7 @@ export class InfrastructureStack extends cdk.Stack {
     // Grant permissions to dubbing handler
     bucket.grantReadWrite(dubbingHandler);
     videosTable.grantReadWriteData(dubbingHandler);
+    elevenLabsSecret.grantRead(dubbingHandler);
 
     const processHandler = new lambda.Function(this, 'ProcessHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,

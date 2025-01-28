@@ -10,6 +10,7 @@ export interface ThemeColors {
   border: string;
   cardBackground: string;
   cardBorder: string;
+  error: string;
 }
 
 export const lightTheme: ThemeColors = {
@@ -22,6 +23,7 @@ export const lightTheme: ThemeColors = {
   border: '#E5E7EB',
   cardBackground: '#FFFFFF',
   cardBorder: '#E5E7EB',
+  error: '#DC2626',
 };
 
 export const darkTheme: ThemeColors = {
@@ -34,6 +36,7 @@ export const darkTheme: ThemeColors = {
   border: '#374151',
   cardBackground: '#1F2937',
   cardBorder: '#374151',
+  error: '#EF4444',
 };
 
 interface ThemeContextType {

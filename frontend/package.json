@@ -13,6 +13,7 @@
     "@aws-amplify/core": "^5.8.0",
     "@aws-amplify/react-native": "^1.1.6",
     "@react-native-async-storage/async-storage": "1.23.1",
+    "@react-native-community/netinfo": "11.4.1",
     "@react-navigation/bottom-tabs": "^6.5.11",
     "@react-navigation/native": "^6.1.9",
     "@react-navigation/native-stack": "^6.9.17",

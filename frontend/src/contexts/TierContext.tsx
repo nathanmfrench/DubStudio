@@ -8,10 +8,12 @@ interface TierData {
   features: string[];
   goal: string;
   icon: string;
+  availableCredits: number;
 }
 
 interface TierContextType {
   currentTier: TierType;
+  currentTierData: TierData;
   tiers: {
     [key in TierType]: TierData;
   };
@@ -29,6 +31,7 @@ const tiers: { [key in TierType]: TierData } = {
     ],
     goal: 'Entry point for individual creators and small businesses',
     icon: 'rocket-launch-outline',
+    availableCredits: 15
   },
   Premium: {
     name: 'Premium',
@@ -40,6 +43,7 @@ const tiers: { [key in TierType]: TierData } = {
     ],
     goal: 'Active content creators or small businesses',
     icon: 'star-outline',
+    availableCredits: 100
   },
   Professional: {
     name: 'Professional',
@@ -52,6 +56,7 @@ const tiers: { [key in TierType]: TierData } = {
     ],
     goal: 'Serious content creators',
     icon: 'diamond-stone',
+    availableCredits: 300
   },
   Enterprise: {
     name: 'Enterprise',
@@ -64,11 +69,13 @@ const tiers: { [key in TierType]: TierData } = {
     ],
     goal: 'Large organizations needing custom solutions',
     icon: 'crown',
+    availableCredits: 999999
   },
 };
 
 const TierContext = createContext<TierContextType>({
   currentTier: 'Professional',
+  currentTierData: tiers.Professional,
   tiers,
   setCurrentTier: () => {},
 });
@@ -78,7 +85,12 @@ export function TierProvider({ children }: { children: ReactNode }) {
   const [currentTier, setCurrentTier] = useState<TierType>('Professional');
 
   return (
-    <TierContext.Provider value={{ currentTier, tiers, setCurrentTier }}>
+    <TierContext.Provider value={{ 
+      currentTier, 
+      currentTierData: tiers[currentTier],
+      tiers, 
+      setCurrentTier 
+    }}>
       {children}
     </TierContext.Provider>
   );
