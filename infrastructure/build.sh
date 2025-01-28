@@ -1,18 +1,21 @@
 #!/bin/bash
-
-# Exit on error
 set -e
 
 echo "🏗️ Building infrastructure..."
 
-# Install infrastructure dependencies
+# Install root dependencies
 npm install
 
-# Build TypeScript Lambda functions
+# Build Lambda functions
 cd lambda
 npm install
-npm run build
+npm run build # Must generate files in "dist/" as per CDK expectations
 cd ..
 
-# Synthesize CDK app
-npx cdk synth
+# Bootstrap AWS environment (only needed once)
+ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+REGION=$(aws configure get region)
+npx cdk bootstrap aws://$ACCOUNT_ID/$REGION
+
+# Deploy CDK stack
+npx cdk deploy --require-approval never

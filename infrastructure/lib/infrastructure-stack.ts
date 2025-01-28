@@ -68,10 +68,6 @@ export class InfrastructureStack extends cdk.Stack {
           required: true,
           mutable: true,
         },
-        givenName: {
-          required: true,
-          mutable: true,
-        },
       },
       customAttributes: {
         tier: new cognito.StringAttribute({ mutable: true }), // For user subscription tier
@@ -128,7 +124,7 @@ export class InfrastructureStack extends cdk.Stack {
     const videoUploadHandler = new lambda.Function(this, 'DubStudioVideoUploadHandler', {
       ...commonLambdaConfig,
       handler: 'videos/upload.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/src')),
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/dist')), // Changed to "dist"
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       environment: {
@@ -140,7 +136,7 @@ export class InfrastructureStack extends cdk.Stack {
     const videoStatusHandler = new lambda.Function(this, 'DubStudioVideoStatusHandler', {
       ...commonLambdaConfig,
       handler: 'videos/status.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/src')),
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/dist')),
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       environment: {
@@ -173,7 +169,7 @@ export class InfrastructureStack extends cdk.Stack {
     const videoProcessHandler = new lambda.Function(this, 'DubStudioVideoProcessHandler', {
       ...commonLambdaConfig,
       handler: 'videos/process.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/src')),
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/dist')),
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       environment: {

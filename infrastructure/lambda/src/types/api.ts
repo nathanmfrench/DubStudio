@@ -15,7 +15,6 @@ export interface CognitoAuthorizerContext {
     sub: string;
     email: string;
     email_verified: string;
-    given_name: string;
     'cognito:username': string;
     'cognito:groups'?: string[];
     aud: string;
@@ -43,7 +42,7 @@ export function getUserEmail(event: AuthenticatedEvent): string {
 }
 
 export function getUserName(event: AuthenticatedEvent): string {
-  return event.requestContext.authorizer.claims.given_name;
+  return event.requestContext.authorizer.claims.email;
 }
 
 export function success(data: any): ApiResponse {

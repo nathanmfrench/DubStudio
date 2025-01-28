@@ -23,8 +23,7 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
         password,
         options: {
           userAttributes: {
-            email,
-            given_name: name
+            email
           }
         }
       });
