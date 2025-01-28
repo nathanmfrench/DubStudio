@@ -147,7 +147,15 @@ export class InfrastructureStack extends cdk.Stack {
 
     // Create Python dubbing handler with layer for dependencies
     const dubbingLayer = new lambda.LayerVersion(this, 'DubStudioDubbingLayer', {
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/python')),
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/python'), {
+        bundling: {
+          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
+          command: [
+            'bash', '-c',
+            'mkdir -p /asset-output/python/lib/python3.9/site-packages && pip install -r requirements.txt -t /asset-output/python/lib/python3.9/site-packages/'
+          ],
+        }
+      }),
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_9],
       description: 'Dependencies for dubbing handler',
     });
