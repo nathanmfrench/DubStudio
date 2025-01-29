@@ -15,6 +15,7 @@ import { useTier } from '../contexts/TierContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { FlingGestureHandler, Directions, State, FlingGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
+import { get, post } from 'aws-amplify/api';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { config } from '../config/env';
@@ -114,14 +115,14 @@ const initialDubbingProgress: DubbingProgress = {
 
 const AVAILABLE_LANGUAGES = [
   { code: 'en', name: 'English' },
-  { code: 'hi', name: 'Hindi' },
   { code: 'pt', name: 'Portuguese' },
   { code: 'zh', name: 'Chinese' },
+  { code: 'hi', name: 'Hindi' },
   { code: 'es', name: 'Spanish' },
+  { code: 'ar', name: 'Arabic' },
   { code: 'fr', name: 'French' },
   { code: 'de', name: 'German' },
   { code: 'ja', name: 'Japanese' },
-  { code: 'ar', name: 'Arabic' },
   { code: 'ru', name: 'Russian' },
   { code: 'ko', name: 'Korean' },
   { code: 'id', name: 'Indonesian' },
@@ -240,21 +241,6 @@ type NavigationProps = NativeStackNavigationProp<any>;
 
 const API_BASE_URL = config.api.baseUrl;
 
-// Add new function for getting auth token
-const getAuthToken = async (): Promise<string> => {
-  try {
-    const session = await fetchAuthSession();
-    const token = session.tokens?.idToken?.toString();
-    if (!token) {
-      throw new Error('No authentication token available');
-    }
-    return token;
-  } catch (error) {
-    console.error('Authentication error:', error);
-    throw new Error('Failed to authenticate. Please try again.');
-  }
-};
-
 export const UploadScreen: React.FC = () => {
   const { currentTierData } = useTier();
   const { colors, isDarkMode } = useTheme();
@@ -308,7 +294,7 @@ export const UploadScreen: React.FC = () => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        mediaTypes: 'videos',
         allowsEditing: true,
         quality: 1,
         videoMaxDuration: MAX_DURATION,
@@ -396,7 +382,7 @@ export const UploadScreen: React.FC = () => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [16, 9],
         quality: 1,
@@ -680,29 +666,35 @@ export const UploadScreen: React.FC = () => {
 
   const uploadVideo = async (uri: string, type: string, name: string): Promise<string> => {
     try {
-      const token = await getAuthToken();
-      
-      // Get upload URL from backend
-      const response = await fetch(`${API_BASE_URL}/videos/upload`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          fileName: name,
-          fileType: type,
-        }),
+      // Log auth state before request
+      const session = await fetchAuthSession();
+      console.log('Auth state before upload:', {
+        hasTokens: !!session.tokens,
+        idToken: session.tokens?.idToken?.toString().substring(0, 20) + '...',
+        accessToken: session.tokens?.accessToken?.toString().substring(0, 20) + '...',
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to get upload URL');
-      }
+      // Get upload URL using Amplify
+      console.log('Making upload URL request to:', '/v1/videos');
+      const { body: uploadData } = await post({
+        apiName: 'dubstudio',
+        path: '/v1/videos',
+        options: {
+          body: {
+            fileName: name,
+            fileType: type,
+          }
+        }
+      }).response;
 
-      const { uploadUrl, videoId } = await response.json();
+      console.log('Upload URL response:', uploadData);
 
-      // Upload video to S3
+      const { uploadUrl, videoId } = await uploadData.json() as {
+        uploadUrl: string;
+        videoId: string;
+      };
+
+      // Upload to S3
       const blob = await fetch(uri).then(r => r.blob());
       const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
@@ -713,63 +705,82 @@ export const UploadScreen: React.FC = () => {
       });
 
       if (!uploadResponse.ok) {
+        console.error('Upload failed with status:', uploadResponse.status);
+        console.error('Upload response:', await uploadResponse.text());
         throw new Error('Failed to upload video to storage');
       }
 
       return videoId;
     } catch (error) {
-      console.error('Error uploading video:', error);
+      console.error('Detailed upload error:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       throw error;
     }
   };
 
   const startProcessing = async (videoId: string) => {
     try {
-      const token = await getAuthToken();
-      
-      const response = await fetch(`${API_BASE_URL}/videos/${videoId}/process`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          sourceLanguage: uploadState.sourceLanguage,
-          targetLanguages: uploadState.targetLanguages,
-          caption: uploadState.caption,
-        }),
+      // Log auth state before request
+      const session = await fetchAuthSession();
+      console.log('Auth state before processing:', {
+        hasTokens: !!session.tokens,
+        idToken: session.tokens?.idToken?.toString().substring(0, 20) + '...',
+        accessToken: session.tokens?.accessToken?.toString().substring(0, 20) + '...',
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to start processing');
-      }
+      console.log('Making process request for videoId:', videoId);
+      const { body } = await post({
+        apiName: 'dubstudio',
+        path: `/v1/videos/${videoId}/process`,
+        options: {
+          body: {
+            sourceLanguage: uploadState.sourceLanguage,
+            targetLanguages: uploadState.targetLanguages,
+            caption: uploadState.caption,
+            translateCaptions: uploadState.translateCaptions
+          }
+        }
+      }).response;
 
-      return response.json();
+      console.log('Process response:', body);
+      return body.json();
     } catch (error) {
-      console.error('Error starting processing:', error);
+      console.error('Detailed processing error:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       throw error;
     }
   };
 
   const checkStatus = async (videoId: string) => {
     try {
-      const token = await getAuthToken();
-      
-      const response = await fetch(`${API_BASE_URL}/videos/${videoId}/status`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      // Log auth state before request
+      const session = await fetchAuthSession();
+      console.log('Auth state before status check:', {
+        hasTokens: !!session.tokens,
+        idToken: session.tokens?.idToken?.toString().substring(0, 20) + '...',
+        accessToken: session.tokens?.accessToken?.toString().substring(0, 20) + '...',
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to get status');
-      }
+      console.log('Making status request for videoId:', videoId);
+      const { body } = await get({
+        apiName: 'dubstudio',
+        path: `/v1/videos/${videoId}/status`,
+      }).response;
 
-      return response.json();
+      console.log('Status response:', body);
+      return body.json();
     } catch (error) {
-      console.error('Error checking status:', error);
+      console.error('Detailed status error:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       throw error;
     }
   };
@@ -812,36 +823,29 @@ export const UploadScreen: React.FC = () => {
     }));
 
     try {
-      // Get auth token
-      const token = await getAuthToken();
-
       // Start upload
       setDubbingProgress(prev => ({
         ...prev,
         status: 'uploading',
         progress: 0
       }));
-
-      
-      // Get upload URL
-      const uploadResponse = await fetch(`${API_BASE_URL}/videos/upload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          fileName: selectedVideo.name,
-          fileType: selectedVideo.type
-        })
-      });
-
-      if (!uploadResponse.ok) {
-        const error = await uploadResponse.json();
-        throw new Error(error.message || 'Failed to get upload URL');
-      }
-
-      const { uploadUrl, videoId } = await uploadResponse.json();
+  
+      // Get upload URL using Amplify
+      const { body: uploadData } = await post({
+        apiName: 'dubstudio',
+        path: '/v1/videos',
+        options: {
+          body: {
+            fileName: selectedVideo.name,
+            fileType: selectedVideo.type
+          }
+        }
+      }).response;
+  
+      const { uploadUrl, videoId } = await uploadData.json() as {
+        uploadUrl: string;
+        videoId: string;
+      };
 
       // Upload to S3 with progress tracking and retry logic
       let uploadAttempts = 0;
@@ -888,44 +892,26 @@ export const UploadScreen: React.FC = () => {
         progress: 0
       }));
 
-      const processResponse = await fetch(`${API_BASE_URL}/videos/${videoId}/process`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sourceLanguage: uploadState.sourceLanguage,
-          targetLanguages: uploadState.targetLanguages,
-          caption: uploadState.caption,
-          translateCaptions: uploadState.translateCaptions
-        })
-      });
-
-      if (!processResponse.ok) {
-        const error = await processResponse.json();
-        throw new Error(error.message || 'Failed to start processing');
-      }
-
-      // Poll for status with exponential backoff
+      // Start processing with retries
       let retryCount = 0;
       const maxRetries = 3;
+
       const pollStatus = async () => {
         try {
-          // Refresh token for long-running operations
-          const freshToken = await getAuthToken();
-          
-          const statusResponse = await fetch(`${API_BASE_URL}/videos/${videoId}/status`, {
-            headers: {
-              'Authorization': `Bearer ${freshToken}`
-            }
-          });
+          const { body } = await get({
+            apiName: 'dubstudio',
+            path: `/v1/videos/${videoId}/status`
+          }).response;
 
-          if (!statusResponse.ok) {
-            throw new Error('Failed to get status');
-          }
-
-          const status = await statusResponse.json();
+          const status = await body.json() as {
+            status: 'completed' | 'failed' | 'processing';
+            progress: number;
+            error?: string;
+            languageProgress?: Record<string, {
+              status: 'pending' | 'processing' | 'completed' | 'failed';
+              progress: number;
+            }>;
+          };
           
           if (status.status === 'completed') {
             setDubbingProgress(prev => ({
@@ -965,8 +951,35 @@ export const UploadScreen: React.FC = () => {
         }
       };
 
-      // Start polling
-      pollStatus();
+      // Start processing
+      try {
+        const { body } = await post({
+          apiName: 'dubstudio',
+          path: `/v1/videos/${videoId}/process`,
+          options: {
+            body: {
+              sourceLanguage: uploadState.sourceLanguage,
+              targetLanguages: uploadState.targetLanguages,
+              caption: uploadState.caption,
+              translateCaptions: uploadState.translateCaptions
+            }
+          }
+        }).response;
+
+        if (!body) {
+          throw new Error('Failed to start processing');
+        }
+
+        // Start polling
+        pollStatus();
+      } catch (error) {
+        console.error('Processing error:', error);
+        setDubbingProgress(prev => ({
+          ...prev,
+          status: 'failed',
+          error: error instanceof Error ? error.message : 'An unknown error occurred'
+        }));
+      }
     } catch (error) {
       console.error('Dubbing error:', error);
       setDubbingProgress(prev => ({

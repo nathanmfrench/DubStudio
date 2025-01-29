@@ -1,4 +1,7 @@
 todo:
+
+more file formats, ability to do multiple video processings at once (for multiple languages)
+
 change watermark to False before production
 
 we need to make a part where if someone JUST wants to put subtitles on their video, they can do that

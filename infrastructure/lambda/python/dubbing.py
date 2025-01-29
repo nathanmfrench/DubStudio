@@ -1,223 +1,192 @@
 import os
-import json
 import time
-import boto3
-import logging
-from typing import Optional, Dict, Any
-from datetime import datetime
+from typing import Optional
 from elevenlabs.client import ElevenLabs
-from botocore.exceptions import ClientError
+import boto3
 
-# Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
-def log_event(stage: str, action: str = None, **kwargs):
-    log_data = {
-        'stage': stage,
-        'timestamp': datetime.utcnow().isoformat(),
-        **({"action": action} if action else {}),
-        **kwargs
-    }
-    logger.info(json.dumps(log_data))
+# Get secret from AWS
+secrets_client = boto3.client('secretsmanager')
+secret = secrets_client.get_secret_value(SecretId='ELEVENLABS_API_KEY')
+ELEVENLABS_API_KEY = secret['SecretString']
 
-# Initialize AWS clients
-s3 = boto3.client('s3')
-secrets_manager = boto3.client('secretsmanager')
-dynamodb = boto3.resource('dynamodb').Table(os.environ['VIDEOS_TABLE_NAME'])
+if not ELEVENLABS_API_KEY:
+    raise ValueError("ELEVENLABS_API_KEY not found in AWS Secrets Manager")
 
-# Cache for secrets (Lambda instance reuse)
-secret_cache = {}
+client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
-def get_secret(secret_name: str) -> str:
-    """Retrieve secret from AWS Secrets Manager with caching"""
-    log_event('PROCESSING', 'fetch_secret', secret_name=secret_name)
-    
-    if secret_name in secret_cache:
-        log_event('PROCESSING', 'use_cached_secret', secret_name=secret_name)
-        return secret_cache[secret_name]
-    
-    try:
-        response = secrets_manager.get_secret_value(SecretId=secret_name)
-        if 'SecretString' in response:
-            secret = response['SecretString']
-            try:
-                secret_data = json.loads(secret)
-                if 'ELEVENLABS_API_KEY' in secret_data:
-                    secret_cache[secret_name] = secret_data['ELEVENLABS_API_KEY']
-                else:
-                    log_event('ERROR', 'missing_api_key_field', secret_name=secret_name)
-                    raise ValueError("Secret missing ELEVENLABS_API_KEY field")
-            except json.JSONDecodeError:
-                secret_cache[secret_name] = secret
-        else:
-            secret_cache[secret_name] = response['SecretBinary']
-        
-        log_event('PROCESSING', 'secret_retrieved', secret_name=secret_name)
-        return secret_cache[secret_name]
-    
-    except ClientError as e:
-        error_code = e.response['Error']['Code']
-        error_msg = f"Secrets Manager Error ({error_code}): {e.response['Error']['Message']}"
-        log_event('ERROR', 'secrets_manager_error', 
-                 error_code=error_code, 
-                 error_message=e.response['Error']['Message'])
-        raise Exception(error_msg) from e
+def download_dubbed_file(dubbing_id: str, language_code: str) -> str:
+    """
+    Downloads the dubbed file for a given dubbing ID and language code.
 
-def get_elevenlabs_client() -> ElevenLabs:
-    """Initialize ElevenLabs client with secret from AWS Secrets Manager"""
-    log_event('PROCESSING', 'initialize_elevenlabs_client')
-    secret_name = os.environ['ELEVENLABS_SECRET_NAME']
-    api_key = get_secret(secret_name)
-    return ElevenLabs(api_key=api_key)
+    Args:
+        dubbing_id: The ID of the dubbing project.
+        language_code: The language code for the dubbing.
 
-def wait_for_dubbing_completion(dubbing_id: str, user_id: str, video_id: str) -> bool:
-    """Wait for the dubbing process to complete"""
-    log_event('PROCESSING', 'check_dubbing_status', 
-              dubbing_id=dubbing_id, 
-              user_id=user_id, 
-              video_id=video_id)
-    
-    client = get_elevenlabs_client()
-    
-    while True:
+    Returns:
+        The file path to the downloaded dubbed file.
+    """
+    dir_path = f"output/{dubbing_id}"
+    os.makedirs(dir_path, exist_ok=True)
+
+    file_path = f"{dir_path}/{language_code}.mp4"
+    with open(file_path, "wb") as file:
+        for chunk in client.dubbing.get_dubbed_file(dubbing_id, language_code):
+            file.write(chunk)
+
+    return file_path
+
+def wait_for_dubbing_completion(dubbing_id: str, verbose: bool = True) -> bool:
+    """
+    Waits for the dubbing process to complete by periodically checking the status.
+
+    Args:
+        dubbing_id (str): The dubbing project id.
+        verbose (bool): Whether to print status updates.
+
+    Returns:
+        bool: True if the dubbing is successful, False otherwise.
+    """
+    MAX_ATTEMPTS = 120
+    CHECK_INTERVAL = 10  # In seconds
+
+    for attempt in range(MAX_ATTEMPTS):
         try:
             metadata = client.dubbing.get_dubbing_project_metadata(dubbing_id)
-            log_event('PROCESSING', 'dubbing_status_check', 
-                     dubbing_id=dubbing_id, 
-                     status=metadata.status)
-
-            # Update DynamoDB
-            dynamodb.update_item(
-                Key={'userId': user_id, 'videoId': video_id},
-                UpdateExpression='SET #status = :status, #updatedAt = :updatedAt',
-                ExpressionAttributeNames={
-                    '#status': 'status',
-                    '#updatedAt': 'updatedAt'
-                },
-                ExpressionAttributeValues={
-                    ':status': 'PROCESSING',
-                    ':updatedAt': time.strftime('%Y-%m-%dT%H:%M:%S.000Z')
-                }
-            )
-            log_event('PROCESSING', 'updated_dynamodb_status', 
-                     user_id=user_id, 
-                     video_id=video_id, 
-                     status='PROCESSING')
-
-            if metadata.status == 'dubbed':
-                log_event('COMPLETE', 'dubbing_finished', dubbing_id=dubbing_id)
+            if metadata.status == "dubbed":
+                if verbose:
+                    print(f"Dubbing completed successfully after {attempt * CHECK_INTERVAL} seconds")
                 return True
-            if metadata.error:
-                log_event('ERROR', 'dubbing_failed', 
-                         dubbing_id=dubbing_id, 
-                         error=metadata.error)
+            elif metadata.status == "dubbing":
+                if verbose:
+                    print(f"Dubbing in progress ({attempt + 1}/{MAX_ATTEMPTS})... {metadata.status}")
+                time.sleep(CHECK_INTERVAL)
+            else:
+                if verbose:
+                    print(f"Dubbing failed: {metadata.error_message}")
                 return False
-
-            time.sleep(5)
         except Exception as e:
-            log_event('ERROR', 'status_check_failed', 
-                     dubbing_id=dubbing_id, 
-                     error=str(e))
+            if verbose:
+                print(f"Error checking dubbing status: {str(e)}")
             return False
 
-def download_dubbed_file(dubbing_id: str, target_language: str) -> str:
-    """Download the dubbed file from ElevenLabs"""
-    log_event('PROCESSING', 'download_dubbed_file', 
-              dubbing_id=dubbing_id, 
-              target_language=target_language)
-    
-    client = get_elevenlabs_client()
-    output_path = f'/tmp/output-{dubbing_id}.mp4'
-    
+    if verbose:
+        print(f"Dubbing timed out after {MAX_ATTEMPTS * CHECK_INTERVAL} seconds")
+    return False
+
+def create_dub_from_file(
+    input_file_path: str,
+    file_format: str,
+    source_language: str,
+    target_language: str,
+    verbose: bool = True
+) -> Optional[str]:
+    """
+    Dubs an audio or video file from one language to another and saves the output.
+
+    Args:
+        input_file_path (str): The file path of the audio or video to dub.
+        file_format (str): The file format of the input file.
+        source_language (str): The language of the input file.
+        target_language (str): The target language to dub into.
+        verbose (bool): Whether to print status updates.
+
+    Returns:
+        Optional[str]: The file path of the dubbed file or None if operation failed.
+    """
+    if not os.path.isfile(input_file_path):
+        raise FileNotFoundError(f"The input file does not exist: {input_file_path}")
+
+    if verbose:
+        print(f"Starting dubbing process for {input_file_path}")
+        print(f"Source language: {source_language}")
+        print(f"Target language: {target_language}")
+
     try:
-        with open(output_path, 'wb') as f:
-            dubbed_file = client.dubbing.get_dubbed_file(dubbing_id, language_code=target_language)
-            for chunk in dubbed_file:
-                f.write(chunk)
-        log_event('COMPLETE', 'file_downloaded', 
-                 dubbing_id=dubbing_id, 
-                 output_path=output_path)
-        return output_path
-    except Exception as e:
-        log_event('ERROR', 'download_failed', 
-                 dubbing_id=dubbing_id, 
-                 error=str(e))
-        raise
-
-def handler(event, context):
-    log_event('START', 'dubbing_handler', 
-              request_id=context.aws_request_id,
-              function_name=context.function_name,
-              event=event)
-    
-    try:
-        # Retrieve ElevenLabs client first to validate secret
-        client = get_elevenlabs_client()
-        
-        user_id = event['userId']
-        video_id = event['videoId']
-        log_event('PROCESSING', 'extract_ids', 
-                 user_id=user_id, 
-                 video_id=video_id)
-        
-        body = json.loads(event['body']) if isinstance(event['body'], str) else event['body']
-        log_event('PROCESSING', 'parse_body', body=body)
-        
-        # Start dubbing process
-        source_language = body.get('sourceLanguage', 'en')
-        target_language = body.get('targetLanguage')
-        
-        log_event('PROCESSING', 'start_dubbing', 
-                 source_language=source_language,
-                 target_language=target_language)
-        
-        # Add your dubbing logic here
-        # ...
-
-        log_event('COMPLETE', 'dubbing_process_finished', 
-                 video_id=video_id,
-                 target_language=target_language)
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps({
-                'message': 'Dubbing process completed successfully',
-                'videoId': video_id
-            })
-        }
-
-    except Exception as e:
-        log_event('ERROR', 'dubbing_process_failed',
-                 error=str(e),
-                 stack_trace=getattr(e, '__traceback__', None),
-                 user_id=user_id if 'user_id' in locals() else None,
-                 video_id=video_id if 'video_id' in locals() else None)
-        
-        if 'user_id' in locals() and 'video_id' in locals():
-            # Update DynamoDB with failed status
-            dynamodb.update_item(
-                Key={'userId': user_id, 'videoId': video_id},
-                UpdateExpression='SET #status = :status, #updatedAt = :updatedAt, #error = :error',
-                ExpressionAttributeNames={
-                    '#status': 'status',
-                    '#updatedAt': 'updatedAt',
-                    '#error': 'error'
-                },
-                ExpressionAttributeValues={
-                    ':status': 'FAILED',
-                    ':updatedAt': time.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-                    ':error': str(e)
-                }
+        with open(input_file_path, "rb") as audio_file:
+            response = client.dubbing.dub_a_video_or_an_audio_file(
+                file=(os.path.basename(input_file_path), audio_file, file_format),
+                target_lang=target_language,
+                source_lang=source_language,
+                num_speakers=1,
+                watermark=True, #set to false when I upgrade to
             )
-            log_event('ERROR', 'updated_dynamodb_with_error',
-                     user_id=user_id,
-                     video_id=video_id,
-                     error=str(e))
+
+        dubbing_id = response.dubbing_id
+        if verbose:
+            print(f"Dubbing initiated with ID: {dubbing_id}")
+
+        if wait_for_dubbing_completion(dubbing_id, verbose):
+            output_file_path = download_dubbed_file(dubbing_id, target_language)
+            if verbose:
+                print(f"Dubbing completed and saved to: {output_file_path}")
+            return output_file_path
+        else:
+            if verbose:
+                print("Dubbing process failed")
+            return None
+
+    except Exception as e:
+        if verbose:
+            print(f"Error during dubbing process: {str(e)}")
+        return None
+
+def test_dubbing(input_file: str, source_lang: str, target_lang: str):
+    """
+    Test function to run a dubbing process with detailed logging.
+    """
+    print("\n=== Starting Dubbing Test ===")
+    print(f"Input file: {input_file}")
+    print(f"Source language: {source_lang}")
+    print(f"Target language: {target_lang}")
+    
+    # Determine file format based on extension
+    file_format = {
+        '.mp3': 'audio/mpeg',
+        '.mp4': 'video/mp4',
+        '.wav': 'audio/wav',
+    }.get(os.path.splitext(input_file)[1].lower(), 'audio/mpeg')
+    
+    print(f"Detected file format: {file_format}")
+    
+    try:
+        result = create_dub_from_file(
+            input_file,
+            file_format,
+            source_lang,
+            target_lang,
+            verbose=True
+        )
         
-        return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'error': str(e)
-            })
-        }
+        if result:
+            print("\n✅ Test completed successfully!")
+            print(f"Output file: {result}")
+            
+            # Verify the output file exists and has content
+            if os.path.exists(result) and os.path.getsize(result) > 0:
+                print(f"Output file size: {os.path.getsize(result)} bytes")
+            else:
+                print("⚠️ Warning: Output file is empty or does not exist")
+        else:
+            print("\n❌ Test failed: No output file was generated")
+            
+    except Exception as e:
+        print(f"\n❌ Test failed with error: {str(e)}")
+
+if __name__ == "__main__":
+    # Create output directory if it doesn't exist
+    os.makedirs("output", exist_ok=True)
+    
+    # Example test cases
+    test_cases = [
+        {
+            "input_file": "example.mp4",
+            "source_lang": "en",
+            "target_lang": "es",
+        },
+        # Add more test cases as needed
+    ]
+    
+    for i, test_case in enumerate(test_cases, 1):
+        print(f"\n=== Running Test Case {i} ===")
+        test_dubbing(**test_case) 

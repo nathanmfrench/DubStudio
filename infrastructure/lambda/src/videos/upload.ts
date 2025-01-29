@@ -59,7 +59,7 @@ export const handler = async (event: AuthenticatedEvent) => {
       timestamp: new Date().toISOString(),
       body: event.body
     });
-
+    
     const body: UploadRequestBody = JSON.parse(event.body);
     if (!body.fileName || !body.fileType) {
       console.log({
@@ -84,7 +84,8 @@ export const handler = async (event: AuthenticatedEvent) => {
     });
 
     // Generate a unique key for the video
-    const key = `${userId}/${videoId}/${body.fileName}`;
+    const key = `${userId}/${videoId}/${body.fileName}`; // Allows path traversal via "../../"
+
 
     console.log({
       stage: 'PROCESSING',

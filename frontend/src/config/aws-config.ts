@@ -33,7 +33,19 @@ export const amplifyConfig = {
     Cognito: {
       userPoolId: config.aws.userPoolId,
       userPoolClientId: config.aws.userPoolClientId,
-      region: config.aws.region
+      region: config.aws.region,
+      authorizationType: 'AMAZON_COGNITO_USER_POOLS'
+    }
+  },
+  API: {
+    REST: {
+      dubstudio: {
+        endpoint: config.api.baseUrl,
+        region: config.aws.region,
+        authorization: {
+          type: 'AMAZON_COGNITO_USER_POOLS'
+        }
+      }
     }
   }
 };
