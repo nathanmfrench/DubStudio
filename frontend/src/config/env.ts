@@ -22,9 +22,6 @@ export interface Config {
     redirectUri: string;
     scopes: string[];
   };
-  elevenlabs: {
-    apiKey: string;
-  };
 }
 
 // Debug Expo config
@@ -68,9 +65,6 @@ const getConfig = (): Config => {
         'pages_read_engagement',
         'business_management'
       ]
-    },
-    elevenlabs: {
-      apiKey: Constants.expoConfig?.extra?.EXPO_PUBLIC_ELEVENLABS_API_KEY || '',
     }
   };
   

@@ -1,6 +1,11 @@
 todo:
-TEst
-find a more methodical way of debugging this problem (maybe with dads apple)
+change watermark to False before production
+
+we need to make a part where if someone JUST wants to put subtitles on their video, they can do that
+
+we want to make it so users can choose if they want to have subtitles at all.
+
+make it so s3 videos are deleted after 1 or 2 days since they are stored on instagram (think about this though)
 
 check Blake anderson marketing section of his guide
 

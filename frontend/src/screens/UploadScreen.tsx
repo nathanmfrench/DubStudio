@@ -19,6 +19,8 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { config } from '../config/env';
 import NetInfo from '@react-native-community/netinfo';
+import { VideoUpload } from '../components/VideoUpload/VideoUpload';
+import { videoService } from '../services/videoService';
 
 interface VideoSelection {
   name: string;
@@ -237,7 +239,6 @@ const formatFileSize = (bytes: number): string => {
 type NavigationProps = NativeStackNavigationProp<any>;
 
 const API_BASE_URL = config.api.baseUrl;
-const elevenLabsApiKey = config.elevenlabs.apiKey;
 
 // Add new function for getting auth token
 const getAuthToken = async (): Promise<string> => {
@@ -254,7 +255,7 @@ const getAuthToken = async (): Promise<string> => {
   }
 };
 
-export function UploadScreen() {
+export const UploadScreen: React.FC = () => {
   const { currentTierData } = useTier();
   const { colors, isDarkMode } = useTheme();
   const [selectedVideo, setSelectedVideo] = useState<VideoSelection | null>(null);
@@ -730,8 +731,7 @@ export function UploadScreen() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'xi-api-key': elevenLabsApiKey
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           sourceLanguage: uploadState.sourceLanguage,
@@ -893,7 +893,6 @@ export function UploadScreen() {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'xi-api-key': elevenLabsApiKey
         },
         body: JSON.stringify({
           sourceLanguage: uploadState.sourceLanguage,
@@ -1319,6 +1318,22 @@ export function UploadScreen() {
     }
   };
 
+  const handleUploadComplete = async (videoId: string) => {
+    Alert.alert('Success', `Video uploaded with ID: ${videoId}`);
+    
+    // Start polling for status
+    try {
+      const status = await videoService.getVideoStatus(videoId);
+      console.log('Initial video status:', status);
+    } catch (error) {
+      console.error('Error checking status:', error);
+    }
+  };
+
+  const handleError = (error: string) => {
+    Alert.alert('Error', error);
+  };
+
   return (
     <ErrorBoundary>
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -1388,7 +1403,7 @@ export function UploadScreen() {
       </SafeAreaView>
     </ErrorBoundary>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
