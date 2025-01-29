@@ -25,9 +25,8 @@ const tiers: { [key in TierType]: TierData } = {
     name: 'Basic',
     monthlyPrice: 9.99,
     features: [
-      '15 videos per month',
-      'Advanced dubbing, unlimited captions',
-      'Views analytics',
+      'Advanced dubbing for 15 videos per month',
+      'Limited subtitles and captions translations'
     ],
     goal: 'Entry point for individual creators and small businesses',
     icon: 'rocket-launch-outline',
@@ -35,7 +34,7 @@ const tiers: { [key in TierType]: TierData } = {
   },
   Premium: {
     name: 'Premium',
-    monthlyPrice: 39,
+    monthlyPrice: 24.99,
     features: [
       '100 videos per month',
       'Full scheduling capabilities',
@@ -51,8 +50,7 @@ const tiers: { [key in TierType]: TierData } = {
     features: [
       '300 videos/month',
       'Advanced scheduling & crossposting',
-      'Growth recommendations',
-      'Account manager',
+      'Advanced analytics for comments, views, engagement',
     ],
     goal: 'Serious content creators',
     icon: 'diamond-stone',
@@ -63,9 +61,8 @@ const tiers: { [key in TierType]: TierData } = {
     monthlyPrice: 199,
     features: [
       'Unlimited videos',
-      'Custom API integration',
-      'White-label solution',
-      'Premium support',
+      'Custom solutions',
+      'Dedicated account manager',
     ],
     goal: 'Large organizations needing custom solutions',
     icon: 'crown',

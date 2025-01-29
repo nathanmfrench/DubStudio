@@ -115,25 +115,29 @@ const initialDubbingProgress: DubbingProgress = {
 };
 
 const AVAILABLE_LANGUAGES = [
+  // Most widely spoken languages globally
   { code: 'en', name: 'English' },
-  { code: 'pt', name: 'Portuguese' },
   { code: 'zh', name: 'Chinese' },
   { code: 'hi', name: 'Hindi' },
+  { code: 'pt', name: 'Portuguese' },
   { code: 'es', name: 'Spanish' },
   { code: 'ar', name: 'Arabic' },
   { code: 'fr', name: 'French' },
-  { code: 'de', name: 'German' },
+  { code: 'id', name: 'Indonesian' },
   { code: 'ja', name: 'Japanese' },
   { code: 'ru', name: 'Russian' },
+  { code: 'de', name: 'German' },
   { code: 'ko', name: 'Korean' },
-  { code: 'id', name: 'Indonesian' },
+  
+  // Other supported languages
   { code: 'it', name: 'Italian' },
-  { code: 'nl', name: 'Dutch' },
   { code: 'tr', name: 'Turkish' },
   { code: 'pl', name: 'Polish' },
-  { code: 'sv', name: 'Swedish' },
+  { code: 'nl', name: 'Dutch' },
   { code: 'fil', name: 'Filipino' },
   { code: 'ms', name: 'Malay' },
+  { code: 'ta', name: 'Tamil' },
+  { code: 'sv', name: 'Swedish' },
   { code: 'ro', name: 'Romanian' },
   { code: 'uk', name: 'Ukrainian' },
   { code: 'el', name: 'Greek' },
@@ -142,8 +146,7 @@ const AVAILABLE_LANGUAGES = [
   { code: 'fi', name: 'Finnish' },
   { code: 'bg', name: 'Bulgarian' },
   { code: 'hr', name: 'Croatian' },
-  { code: 'sk', name: 'Slovak' },
-  { code: 'ta', name: 'Tamil' }
+  { code: 'sk', name: 'Slovak' }
 ];
 
 const MAX_DURATION = 90; // 90 seconds max for Instagram Reels
@@ -259,7 +262,6 @@ export const UploadScreen: React.FC = () => {
   });
   const [languageSearch, setLanguageSearch] = useState('');
   const [dubbingProgress, setDubbingProgress] = useState<DubbingProgress>(initialDubbingProgress);
-  const navigation = useNavigation<NavigationProps>();
 
   useEffect(() => {
     Animated.timing(animation, {
@@ -549,31 +551,21 @@ export const UploadScreen: React.FC = () => {
   };
 
   const filteredSourceLanguages = AVAILABLE_LANGUAGES
-    .filter(lang => lang.name.toLowerCase().includes(languageSearch.toLowerCase()))
-    .sort((a, b) => {
-      if (a.code === uploadState.sourceLanguage) return -1;
-      if (b.code === uploadState.sourceLanguage) return 1;
-      return a.name.localeCompare(b.name);
-    });
+    .filter(lang => lang.name.toLowerCase().includes(languageSearch.toLowerCase()));
 
   const filteredTargetLanguages = AVAILABLE_LANGUAGES
     .filter(lang => 
       lang.code !== uploadState.sourceLanguage && 
       lang.name.toLowerCase().includes(languageSearch.toLowerCase())
-    )
-    .sort((a, b) => {
-      const aSelected = uploadState.targetLanguages.includes(a.code);
-      const bSelected = uploadState.targetLanguages.includes(b.code);
-      if (aSelected && !bSelected) return -1;
-      if (!aSelected && bSelected) return 1;
-      return a.name.localeCompare(b.name);
-    });
+    );
 
   const renderStep2 = () => {
     if (!selectedVideo) return null;
 
     return (
       <>
+        {renderVideoPreview()}
+        
         <View style={[styles.inputContainer, {
           backgroundColor: colors.surface,
           borderColor: colors.cardBorder
@@ -664,192 +656,6 @@ export const UploadScreen: React.FC = () => {
         </View>
       </>
     );
-  };
-
-  const startProcessing = async (videoId: string) => {
-    try {
-      if (!isAuthenticated) {
-        throw new Error('User is not authenticated');
-      }
-
-      // Log auth state before request
-      const session = await fetchAuthSession();
-      if (!session.tokens?.accessToken) {
-        throw new Error('No valid access token found');
-      }
-
-      // Validate token
-      const accessToken = session.tokens.accessToken;
-      const tokenPayload = accessToken.payload;
-      
-      // Validate token expiration
-      const now = Math.floor(Date.now() / 1000);
-      if (!tokenPayload.exp) {
-        console.error('Token missing expiration');
-        throw new Error('Invalid token - missing expiration');
-      }
-
-      if (tokenPayload.exp <= now) {
-        console.error('Token has expired:', {
-          expiration: new Date(tokenPayload.exp * 1000).toISOString(),
-          now: new Date(now * 1000).toISOString()
-        });
-        throw new Error('Access token has expired');
-      }
-
-      // Validate token use and scope
-      if (tokenPayload.token_use !== 'access') {
-        console.error('❌ Invalid token_use:', tokenPayload.token_use);
-        throw new Error('Invalid token type - expected access token');
-      }
-
-      const requiredScope = 'aws.cognito.signin.user.admin';
-      const tokenScopes = tokenPayload.scope?.split(' ') || [];
-      
-      console.log('🔍 Token Validation:', {
-        tokenUse: tokenPayload.token_use,
-        expiration: new Date(tokenPayload.exp * 1000).toISOString(),
-        scopes: tokenScopes,
-        requiredScope,
-        hasRequiredScope: tokenScopes.includes(requiredScope)
-      });
-
-      if (!tokenScopes.includes(requiredScope)) {
-        console.error('❌ Missing required scope:', {
-          required: requiredScope,
-          available: tokenScopes
-        });
-        throw new Error('Token missing required scope');
-      }
-
-      console.log('Auth state before processing:', {
-        hasTokens: !!session.tokens,
-        tokenDetails: {
-          jwtToken: accessToken.toString().substring(0, 20) + '...',
-          exp: tokenPayload.exp ? new Date(tokenPayload.exp * 1000).toISOString() : 'unknown',
-          scope: tokenPayload.scope,
-          username: tokenPayload.username
-        },
-        videoId
-      });
-
-      console.log('Making process request for videoId:', videoId);
-      const { body } = await post({
-        apiName: 'dubstudio',
-        path: `/v1/videos/${videoId}/process`,
-        options: {
-          headers: {
-            Authorization: `Bearer ${accessToken.toString()}`
-          },
-          body: {
-            sourceLanguage: uploadState.sourceLanguage,
-            targetLanguages: uploadState.targetLanguages,
-            caption: uploadState.caption,
-            translateCaptions: uploadState.translateCaptions
-          }
-        }
-      }).response;
-
-      console.log('Process response:', body);
-      return body.json();
-    } catch (error) {
-      console.error('Detailed processing error:', {
-        error,
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      throw error;
-    }
-  };
-
-  const checkStatus = async (videoId: string) => {
-    try {
-      if (!isAuthenticated) {
-        throw new Error('User is not authenticated');
-      }
-
-      // Log auth state before request
-      const session = await fetchAuthSession();
-      if (!session.tokens?.accessToken) {
-        throw new Error('No valid access token found');
-      }
-
-      // Validate token
-      const accessToken = session.tokens.accessToken;
-      const tokenPayload = accessToken.payload;
-      
-      // Validate token expiration
-      const now = Math.floor(Date.now() / 1000);
-      if (!tokenPayload.exp) {
-        console.error('Token missing expiration');
-        throw new Error('Invalid token - missing expiration');
-      }
-
-      if (tokenPayload.exp <= now) {
-        console.error('Token has expired:', {
-          expiration: new Date(tokenPayload.exp * 1000).toISOString(),
-          now: new Date(now * 1000).toISOString()
-        });
-        throw new Error('Access token has expired');
-      }
-
-      // Validate token use and scope
-      if (tokenPayload.token_use !== 'access') {
-        console.error('❌ Invalid token_use:', tokenPayload.token_use);
-        throw new Error('Invalid token type - expected access token');
-      }
-
-      const requiredScope = 'aws.cognito.signin.user.admin';
-      const tokenScopes = tokenPayload.scope?.split(' ') || [];
-      
-      console.log('🔍 Token Validation:', {
-        tokenUse: tokenPayload.token_use,
-        expiration: new Date(tokenPayload.exp * 1000).toISOString(),
-        scopes: tokenScopes,
-        requiredScope,
-        hasRequiredScope: tokenScopes.includes(requiredScope)
-      });
-
-      if (!tokenScopes.includes(requiredScope)) {
-        console.error('❌ Missing required scope:', {
-          required: requiredScope,
-          available: tokenScopes
-        });
-        throw new Error('Token missing required scope');
-      }
-
-      console.log('Auth state before status check:', {
-        hasTokens: !!session.tokens,
-        tokenDetails: {
-          jwtToken: accessToken.toString().substring(0, 20) + '...',
-          exp: new Date(tokenPayload.exp * 1000).toISOString(),
-          scope: tokenPayload.scope,
-          username: tokenPayload.username
-        },
-        videoId
-      });
-
-      console.log('Making status request for videoId:', videoId);
-      const { body } = await get({
-        apiName: 'dubstudio',
-        path: `/v1/videos/${videoId}/status`,
-        options: {
-          headers: {
-            Authorization: `Bearer ${accessToken.toString()}`
-          }
-        }
-      }).response;
-
-      console.log('Status response:', body);
-      return body.json();
-    } catch (error) {
-      console.error('Detailed status error:', {
-        error,
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      throw error;
-    }
   };
 
   const startDubbing = async () => {

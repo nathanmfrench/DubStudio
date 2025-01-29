@@ -19,54 +19,6 @@ interface PricingTier {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
 }
 
-const pricingTiers: PricingTier[] = [
-  {
-    name: 'Basic',
-    monthlyPrice: 9.99,
-    features: [
-      '15 videos per month',
-      'Advanced dubbing, unlimited captions',
-      'Views analytics',
-    ],
-    goal: 'Entry point for individual creators and small businesses',
-    icon: 'rocket-launch-outline',
-  },
-  {
-    name: 'Premium',
-    monthlyPrice: 39,
-    features: [
-      '100 videos per month',
-      'Full scheduling capabilities',
-      'Views & Comments Analytics',
-    ],
-    goal: 'Active content creators or small businesses',
-    icon: 'star-outline',
-  },
-  {
-    name: 'Professional',
-    monthlyPrice: 99,
-    features: [
-      '300 videos/month',
-      'Advanced scheduling & crossposting',
-      'Growth recommendations',
-      'Account manager',
-    ],
-    goal: 'Serious content creators',
-    icon: 'diamond-stone',
-  },
-  {
-    name: 'Enterprise',
-    monthlyPrice: 199,
-    features: [
-      'Unlimited videos',
-      'Custom API integration',
-      'White-label solution',
-      'Premium support',
-    ],
-    goal: 'Large organizations needing custom solutions',
-    icon: 'crown',
-  },
-];
 
 export function ProfileScreen() {
   const { signOut } = useAuth();
