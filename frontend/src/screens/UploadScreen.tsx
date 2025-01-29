@@ -699,27 +699,27 @@ export const UploadScreen: React.FC = () => {
 
       // Validate token use and scope
       if (tokenPayload.token_use !== 'access') {
-        console.error('Invalid token_use:', tokenPayload.token_use);
+        console.error('❌ Invalid token_use:', tokenPayload.token_use);
         throw new Error('Invalid token type - expected access token');
       }
 
-      const requiredScopes = ['openid', 'profile'];
+      const requiredScope = 'aws.cognito.signin.user.admin';
       const tokenScopes = tokenPayload.scope?.split(' ') || [];
       
       console.log('🔍 Token Validation:', {
         tokenUse: tokenPayload.token_use,
         expiration: new Date(tokenPayload.exp * 1000).toISOString(),
         scopes: tokenScopes,
-        requiredScopes,
-        hasRequiredScopes: requiredScopes.every(scope => tokenScopes.includes(scope))
+        requiredScope,
+        hasRequiredScope: tokenScopes.includes(requiredScope)
       });
 
-      if (!requiredScopes.every(scope => tokenScopes.includes(scope))) {
-        console.error('❌ Missing required scopes:', {
-          required: requiredScopes,
+      if (!tokenScopes.includes(requiredScope)) {
+        console.error('❌ Missing required scope:', {
+          required: requiredScope,
           available: tokenScopes
         });
-        throw new Error('Token missing required scopes');
+        throw new Error('Token missing required scope');
       }
 
       console.log('Auth state before processing:', {
@@ -738,6 +738,9 @@ export const UploadScreen: React.FC = () => {
         apiName: 'dubstudio',
         path: `/v1/videos/${videoId}/process`,
         options: {
+          headers: {
+            Authorization: `Bearer ${accessToken.toString()}`
+          },
           body: {
             sourceLanguage: uploadState.sourceLanguage,
             targetLanguages: uploadState.targetLanguages,
@@ -792,27 +795,27 @@ export const UploadScreen: React.FC = () => {
 
       // Validate token use and scope
       if (tokenPayload.token_use !== 'access') {
-        console.error('Invalid token_use:', tokenPayload.token_use);
+        console.error('❌ Invalid token_use:', tokenPayload.token_use);
         throw new Error('Invalid token type - expected access token');
       }
 
-      const requiredScopes = ['openid', 'profile'];
+      const requiredScope = 'aws.cognito.signin.user.admin';
       const tokenScopes = tokenPayload.scope?.split(' ') || [];
       
       console.log('🔍 Token Validation:', {
         tokenUse: tokenPayload.token_use,
         expiration: new Date(tokenPayload.exp * 1000).toISOString(),
         scopes: tokenScopes,
-        requiredScopes,
-        hasRequiredScopes: requiredScopes.every(scope => tokenScopes.includes(scope))
+        requiredScope,
+        hasRequiredScope: tokenScopes.includes(requiredScope)
       });
 
-      if (!requiredScopes.every(scope => tokenScopes.includes(scope))) {
-        console.error('❌ Missing required scopes:', {
-          required: requiredScopes,
+      if (!tokenScopes.includes(requiredScope)) {
+        console.error('❌ Missing required scope:', {
+          required: requiredScope,
           available: tokenScopes
         });
-        throw new Error('Token missing required scopes');
+        throw new Error('Token missing required scope');
       }
 
       console.log('Auth state before status check:', {
@@ -830,6 +833,11 @@ export const UploadScreen: React.FC = () => {
       const { body } = await get({
         apiName: 'dubstudio',
         path: `/v1/videos/${videoId}/status`,
+        options: {
+          headers: {
+            Authorization: `Bearer ${accessToken.toString()}`
+          }
+        }
       }).response;
 
       console.log('Status response:', body);
@@ -933,23 +941,23 @@ export const UploadScreen: React.FC = () => {
         throw new Error('Invalid token type - expected access token');
       }
 
-      const requiredScopes = ['openid', 'profile'];
+      const requiredScope = 'aws.cognito.signin.user.admin';
       const tokenScopes = tokenPayload.scope?.split(' ') || [];
       
       console.log('🔍 Token Validation:', {
         tokenUse: tokenPayload.token_use,
         expiration: new Date(tokenPayload.exp * 1000).toISOString(),
         scopes: tokenScopes,
-        requiredScopes,
-        hasRequiredScopes: requiredScopes.every(scope => tokenScopes.includes(scope))
+        requiredScope,
+        hasRequiredScope: tokenScopes.includes(requiredScope)
       });
 
-      if (!requiredScopes.every(scope => tokenScopes.includes(scope))) {
-        console.error('❌ Missing required scopes:', {
-          required: requiredScopes,
+      if (!tokenScopes.includes(requiredScope)) {
+        console.error('❌ Missing required scope:', {
+          required: requiredScope,
           available: tokenScopes
         });
-        throw new Error('Token missing required scopes');
+        throw new Error('Token missing required scope');
       }
   
       // Get upload URL using Amplify
@@ -966,6 +974,9 @@ export const UploadScreen: React.FC = () => {
         apiName: 'dubstudio',
         path: '/v1/videos',
         options: {
+          headers: {
+            Authorization: `Bearer ${accessToken.toString()}`
+          },
           body: {
             fileName: selectedVideo.name,
             fileType: selectedVideo.type
@@ -1057,7 +1068,12 @@ export const UploadScreen: React.FC = () => {
         try {
           const { body } = await get({
             apiName: 'dubstudio',
-            path: `/v1/videos/${videoId}/status`
+            path: `/v1/videos/${videoId}/status`,
+            options: {
+              headers: {
+                Authorization: `Bearer ${accessToken.toString()}`
+              }
+            }
           }).response;
 
           const status = await body.json() as {
@@ -1114,6 +1130,9 @@ export const UploadScreen: React.FC = () => {
           apiName: 'dubstudio',
           path: `/v1/videos/${videoId}/process`,
           options: {
+            headers: {
+              Authorization: `Bearer ${accessToken.toString()}`
+            },
             body: {
               sourceLanguage: uploadState.sourceLanguage,
               targetLanguages: uploadState.targetLanguages,
