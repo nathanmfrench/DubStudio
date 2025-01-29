@@ -1,5 +1,7 @@
 todo:
 
+i assume in production we don't want to use this aws cognito scope: aws.cognito.signin.user.admin
+
    callbackUrls: ['exp://localhost:19000/--/*'], // Update with your Expo callback URLs
 
 production endpoint vs but I have a development environment. nbd but fix before prod
