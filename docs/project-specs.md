@@ -1,5 +1,14 @@
 todo:
 
+   callbackUrls: ['exp://localhost:19000/--/*'], // Update with your Expo callback URLs
+
+production endpoint vs but I have a development environment. nbd but fix before prod
+
+
+right now when I type in my username "nathan" into the email field in the login page and enter my password it works
+
+sign up page broken because of email vs username "username cannot be of email format since user pool is configured for email alias"
+
 more file formats, ability to do multiple video processings at once (for multiple languages)
 
 change watermark to False before production

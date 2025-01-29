@@ -22,6 +22,7 @@ import { config } from '../config/env';
 import NetInfo from '@react-native-community/netinfo';
 import { VideoUpload } from '../components/VideoUpload/VideoUpload';
 import { videoService } from '../services/videoService';
+import { useAuth } from '../contexts/AuthContext';
 
 interface VideoSelection {
   name: string;
@@ -244,6 +245,7 @@ const API_BASE_URL = config.api.baseUrl;
 export const UploadScreen: React.FC = () => {
   const { currentTierData } = useTier();
   const { colors, isDarkMode } = useTheme();
+  const { isAuthenticated, user } = useAuth();
   const [selectedVideo, setSelectedVideo] = useState<VideoSelection | null>(null);
   const [useDefaultThumbnail, setUseDefaultThumbnail] = useState(true);
   const [currentStep, setCurrentStep] = useState(1);
@@ -666,19 +668,91 @@ export const UploadScreen: React.FC = () => {
 
   const uploadVideo = async (uri: string, type: string, name: string): Promise<string> => {
     try {
+      console.log('=== Starting Upload Process ===');
+      console.log('Authentication state:', { isAuthenticated, user });
+
+      if (!isAuthenticated) {
+        console.error('❌ Authentication check failed:', { isAuthenticated, user });
+        throw new Error('User is not authenticated');
+      }
+
       // Log auth state before request
+      console.log('📝 Fetching auth session...');
       const session = await fetchAuthSession();
-      console.log('Auth state before upload:', {
+      console.log('🔑 Auth Session Details:', {
         hasTokens: !!session.tokens,
-        idToken: session.tokens?.idToken?.toString().substring(0, 20) + '...',
-        accessToken: session.tokens?.accessToken?.toString().substring(0, 20) + '...',
+        tokenTypes: session.tokens ? Object.keys(session.tokens) : [],
+        identityId: session.identityId
       });
 
+      if (!session.tokens?.accessToken) {
+        console.error('❌ No access token found in session');
+        throw new Error('No valid access token found');
+      }
+
+      // Add detailed token logging and validation
+      const accessToken = session.tokens.accessToken;
+      const tokenPayload = accessToken.payload;
+      
+      console.log('🎟️ Full Token Details:', {
+        rawToken: accessToken.toString(),
+        payload: tokenPayload
+      });
+      
+      // Validate token expiration
+      const now = Math.floor(Date.now() / 1000);
+      if (!tokenPayload.exp) {
+        console.error('❌ Token missing expiration');
+        throw new Error('Invalid token - missing expiration');
+      }
+
+      if (tokenPayload.exp <= now) {
+        console.error('❌ Token has expired:', {
+          expiration: new Date(tokenPayload.exp * 1000).toISOString(),
+          now: new Date(now * 1000).toISOString()
+        });
+        throw new Error('Access token has expired');
+      }
+
+      // Validate token use and scope
+      if (tokenPayload.token_use !== 'access') {
+        console.error('❌ Invalid token_use:', tokenPayload.token_use);
+        throw new Error('Invalid token type - expected access token');
+      }
+
+      const requiredScopes = ['openid', 'profile'];
+      const tokenScopes = tokenPayload.scope?.split(' ') || [];
+      
+      console.log('🔍 Token Validation:', {
+        tokenUse: tokenPayload.token_use,
+        expiration: new Date(tokenPayload.exp * 1000).toISOString(),
+        scopes: tokenScopes,
+        requiredScopes,
+        hasRequiredScopes: requiredScopes.every(scope => tokenScopes.includes(scope))
+      });
+
+      if (!requiredScopes.every(scope => tokenScopes.includes(scope))) {
+        console.error('❌ Missing required scopes:', {
+          required: requiredScopes,
+          available: tokenScopes
+        });
+        throw new Error('Token missing required scopes');
+      }
+
       // Get upload URL using Amplify
-      console.log('Making upload URL request to:', '/v1/videos');
+      const apiEndpoint = '/v1/videos';
+      console.log('📤 Making upload URL request:', {
+        endpoint: apiEndpoint,
+        method: 'POST',
+        body: {
+          fileName: name,
+          fileType: type,
+        }
+      });
+
       const { body: uploadData } = await post({
         apiName: 'dubstudio',
-        path: '/v1/videos',
+        path: apiEndpoint,
         options: {
           body: {
             fileName: name,
@@ -687,15 +761,28 @@ export const UploadScreen: React.FC = () => {
         }
       }).response;
 
-      console.log('Upload URL response:', uploadData);
+      console.log('Upload URL response received:', {
+        status: uploadData,
+      });
 
       const { uploadUrl, videoId } = await uploadData.json() as {
         uploadUrl: string;
         videoId: string;
       };
 
+      console.log('Parsed upload response:', {
+        videoId,
+        uploadUrl: uploadUrl.substring(0, 50) + '...'
+      });
+
       // Upload to S3
       const blob = await fetch(uri).then(r => r.blob());
+      console.log('Uploading to S3:', {
+        blobSize: blob.size,
+        blobType: blob.type,
+        uploadUrl: uploadUrl.substring(0, 50) + '...'
+      });
+
       const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
         body: blob,
@@ -704,18 +791,31 @@ export const UploadScreen: React.FC = () => {
         },
       });
 
+      console.log('S3 Upload response:', {
+        status: uploadResponse.status,
+        ok: uploadResponse.ok,
+        headers: Object.fromEntries(uploadResponse.headers.entries())
+      });
+
       if (!uploadResponse.ok) {
-        console.error('Upload failed with status:', uploadResponse.status);
-        console.error('Upload response:', await uploadResponse.text());
+        const errorText = await uploadResponse.text();
+        console.error('Upload failed:', {
+          status: uploadResponse.status,
+          response: errorText,
+          headers: Object.fromEntries(uploadResponse.headers.entries())
+        });
         throw new Error('Failed to upload video to storage');
       }
 
       return videoId;
     } catch (error) {
-      console.error('Detailed upload error:', {
-        error,
+      console.error('Upload error details:', {
+        name: error instanceof Error ? error.name : 'Unknown',
         message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
+        stack: error instanceof Error ? error.stack : undefined,
+        isError: error instanceof Error,
+        errorType: typeof error,
+        errorJSON: JSON.stringify(error)
       });
       throw error;
     }
@@ -723,12 +823,69 @@ export const UploadScreen: React.FC = () => {
 
   const startProcessing = async (videoId: string) => {
     try {
+      if (!isAuthenticated) {
+        throw new Error('User is not authenticated');
+      }
+
       // Log auth state before request
       const session = await fetchAuthSession();
+      if (!session.tokens?.accessToken) {
+        throw new Error('No valid access token found');
+      }
+
+      // Validate token
+      const accessToken = session.tokens.accessToken;
+      const tokenPayload = accessToken.payload;
+      
+      // Validate token expiration
+      const now = Math.floor(Date.now() / 1000);
+      if (!tokenPayload.exp) {
+        console.error('Token missing expiration');
+        throw new Error('Invalid token - missing expiration');
+      }
+
+      if (tokenPayload.exp <= now) {
+        console.error('Token has expired:', {
+          expiration: new Date(tokenPayload.exp * 1000).toISOString(),
+          now: new Date(now * 1000).toISOString()
+        });
+        throw new Error('Access token has expired');
+      }
+
+      // Validate token use and scope
+      if (tokenPayload.token_use !== 'access') {
+        console.error('Invalid token_use:', tokenPayload.token_use);
+        throw new Error('Invalid token type - expected access token');
+      }
+
+      const requiredScopes = ['openid', 'profile'];
+      const tokenScopes = tokenPayload.scope?.split(' ') || [];
+      
+      console.log('🔍 Token Validation:', {
+        tokenUse: tokenPayload.token_use,
+        expiration: new Date(tokenPayload.exp * 1000).toISOString(),
+        scopes: tokenScopes,
+        requiredScopes,
+        hasRequiredScopes: requiredScopes.every(scope => tokenScopes.includes(scope))
+      });
+
+      if (!requiredScopes.every(scope => tokenScopes.includes(scope))) {
+        console.error('❌ Missing required scopes:', {
+          required: requiredScopes,
+          available: tokenScopes
+        });
+        throw new Error('Token missing required scopes');
+      }
+
       console.log('Auth state before processing:', {
         hasTokens: !!session.tokens,
-        idToken: session.tokens?.idToken?.toString().substring(0, 20) + '...',
-        accessToken: session.tokens?.accessToken?.toString().substring(0, 20) + '...',
+        tokenDetails: {
+          jwtToken: accessToken.toString().substring(0, 20) + '...',
+          exp: tokenPayload.exp ? new Date(tokenPayload.exp * 1000).toISOString() : 'unknown',
+          scope: tokenPayload.scope,
+          username: tokenPayload.username
+        },
+        videoId
       });
 
       console.log('Making process request for videoId:', videoId);
@@ -759,12 +916,69 @@ export const UploadScreen: React.FC = () => {
 
   const checkStatus = async (videoId: string) => {
     try {
+      if (!isAuthenticated) {
+        throw new Error('User is not authenticated');
+      }
+
       // Log auth state before request
       const session = await fetchAuthSession();
+      if (!session.tokens?.accessToken) {
+        throw new Error('No valid access token found');
+      }
+
+      // Validate token
+      const accessToken = session.tokens.accessToken;
+      const tokenPayload = accessToken.payload;
+      
+      // Validate token expiration
+      const now = Math.floor(Date.now() / 1000);
+      if (!tokenPayload.exp) {
+        console.error('Token missing expiration');
+        throw new Error('Invalid token - missing expiration');
+      }
+
+      if (tokenPayload.exp <= now) {
+        console.error('Token has expired:', {
+          expiration: new Date(tokenPayload.exp * 1000).toISOString(),
+          now: new Date(now * 1000).toISOString()
+        });
+        throw new Error('Access token has expired');
+      }
+
+      // Validate token use and scope
+      if (tokenPayload.token_use !== 'access') {
+        console.error('Invalid token_use:', tokenPayload.token_use);
+        throw new Error('Invalid token type - expected access token');
+      }
+
+      const requiredScopes = ['openid', 'profile'];
+      const tokenScopes = tokenPayload.scope?.split(' ') || [];
+      
+      console.log('🔍 Token Validation:', {
+        tokenUse: tokenPayload.token_use,
+        expiration: new Date(tokenPayload.exp * 1000).toISOString(),
+        scopes: tokenScopes,
+        requiredScopes,
+        hasRequiredScopes: requiredScopes.every(scope => tokenScopes.includes(scope))
+      });
+
+      if (!requiredScopes.every(scope => tokenScopes.includes(scope))) {
+        console.error('❌ Missing required scopes:', {
+          required: requiredScopes,
+          available: tokenScopes
+        });
+        throw new Error('Token missing required scopes');
+      }
+
       console.log('Auth state before status check:', {
         hasTokens: !!session.tokens,
-        idToken: session.tokens?.idToken?.toString().substring(0, 20) + '...',
-        accessToken: session.tokens?.accessToken?.toString().substring(0, 20) + '...',
+        tokenDetails: {
+          jwtToken: accessToken.toString().substring(0, 20) + '...',
+          exp: new Date(tokenPayload.exp * 1000).toISOString(),
+          scope: tokenPayload.scope,
+          username: tokenPayload.username
+        },
+        videoId
       });
 
       console.log('Making status request for videoId:', videoId);
@@ -829,8 +1043,80 @@ export const UploadScreen: React.FC = () => {
         status: 'uploading',
         progress: 0
       }));
+
+      // Log auth state before request
+      console.log('📝 Fetching auth session...');
+      const session = await fetchAuthSession();
+      console.log('🔑 Auth Session Details:', {
+        hasTokens: !!session.tokens,
+        tokenTypes: session.tokens ? Object.keys(session.tokens) : [],
+        identityId: session.identityId
+      });
+
+      if (!session.tokens?.accessToken) {
+        console.error('❌ No access token found in session');
+        throw new Error('No valid access token found');
+      }
+
+      // Add detailed token logging and validation
+      const accessToken = session.tokens.accessToken;
+      const tokenPayload = accessToken.payload;
+      
+      console.log('🎟️ Full Token Details:', {
+        rawToken: accessToken.toString(),
+        payload: tokenPayload
+      });
+      
+      // Validate token expiration
+      const now = Math.floor(Date.now() / 1000);
+      if (!tokenPayload.exp) {
+        console.error('❌ Token missing expiration');
+        throw new Error('Invalid token - missing expiration');
+      }
+
+      if (tokenPayload.exp <= now) {
+        console.error('❌ Token has expired:', {
+          expiration: new Date(tokenPayload.exp * 1000).toISOString(),
+          now: new Date(now * 1000).toISOString()
+        });
+        throw new Error('Access token has expired');
+      }
+
+      // Validate token use and scope
+      if (tokenPayload.token_use !== 'access') {
+        console.error('❌ Invalid token_use:', tokenPayload.token_use);
+        throw new Error('Invalid token type - expected access token');
+      }
+
+      const requiredScopes = ['openid', 'profile'];
+      const tokenScopes = tokenPayload.scope?.split(' ') || [];
+      
+      console.log('🔍 Token Validation:', {
+        tokenUse: tokenPayload.token_use,
+        expiration: new Date(tokenPayload.exp * 1000).toISOString(),
+        scopes: tokenScopes,
+        requiredScopes,
+        hasRequiredScopes: requiredScopes.every(scope => tokenScopes.includes(scope))
+      });
+
+      if (!requiredScopes.every(scope => tokenScopes.includes(scope))) {
+        console.error('❌ Missing required scopes:', {
+          required: requiredScopes,
+          available: tokenScopes
+        });
+        throw new Error('Token missing required scopes');
+      }
   
       // Get upload URL using Amplify
+      console.log('📤 Making upload URL request:', {
+        endpoint: '/v1/videos',
+        method: 'POST',
+        body: {
+          fileName: selectedVideo.name,
+          fileType: selectedVideo.type
+        }
+      });
+
       const { body: uploadData } = await post({
         apiName: 'dubstudio',
         path: '/v1/videos',
@@ -841,11 +1127,16 @@ export const UploadScreen: React.FC = () => {
           }
         }
       }).response;
-  
+
       const { uploadUrl, videoId } = await uploadData.json() as {
         uploadUrl: string;
         videoId: string;
       };
+
+      console.log('📥 Upload URL response received:', {
+        videoId,
+        uploadUrl: uploadUrl.substring(0, 50) + '...'
+      });
 
       // Upload to S3 with progress tracking and retry logic
       let uploadAttempts = 0;
@@ -854,11 +1145,18 @@ export const UploadScreen: React.FC = () => {
       const uploadWithRetry = async (): Promise<void> => {
         try {
           const blob = await fetch(selectedVideo.uri).then(r => r.blob());
+          console.log('🚀 Starting S3 upload:', {
+            blobSize: blob.size,
+            blobType: blob.type,
+            uploadUrl: uploadUrl.substring(0, 50) + '...'
+          });
+
           const xhr = new XMLHttpRequest();
           
           xhr.upload.onprogress = (event) => {
             if (event.lengthComputable) {
               const progress = Math.round((event.loaded / event.total) * 100);
+              console.log(`📊 Upload progress: ${progress}%`);
               setDubbingProgress(prev => ({
                 ...prev,
                 progress
@@ -867,8 +1165,22 @@ export const UploadScreen: React.FC = () => {
           };
 
           await new Promise((resolve, reject) => {
-            xhr.onload = () => xhr.status === 200 ? resolve(null) : reject(new Error('Upload failed'));
-            xhr.onerror = () => reject(new Error('Upload failed'));
+            xhr.onload = () => {
+              console.log('📡 Upload response:', {
+                status: xhr.status,
+                statusText: xhr.statusText,
+                headers: xhr.getAllResponseHeaders()
+              });
+              xhr.status === 200 ? resolve(null) : reject(new Error('Upload failed'));
+            };
+            xhr.onerror = () => {
+              console.error('❌ Upload XHR error:', {
+                status: xhr.status,
+                statusText: xhr.statusText,
+                headers: xhr.getAllResponseHeaders()
+              });
+              reject(new Error('Upload failed'));
+            };
             xhr.open('PUT', uploadUrl);
             xhr.setRequestHeader('Content-Type', selectedVideo.type);
             xhr.send(blob);
