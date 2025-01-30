@@ -1,5 +1,7 @@
 todo:
+step 4 should be different depending on what the user selected in the first step. if they chose schedule, it should have options to schedule the post. if they chose dub or sub, it should have options to do those as well.
 
+simplify page to just be upload video and source language and caption, instead of video select individually -> video preview with src language and the caption
 i assume in production we don't want to use this aws cognito scope: aws.cognito.signin.user.admin
 
    callbackUrls: ['exp://localhost:19000/--/*'], // Update with your Expo callback URLs

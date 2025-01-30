@@ -91,7 +91,16 @@ interface AccountCreationDetails {
 interface UploadState {
   sourceLanguage: string;
   caption: string;
+  translationType: 'dubbing' | 'subtitles' | 'schedule' | '';
   targetLanguages: string[];
+  includeSubtitles: boolean;
+  subtitleData?: {
+    [language: string]: Array<{
+      startTime: number;
+      endTime: number;
+      text: string;
+    }>;
+  };
   translateCaptions: boolean;
   deliveryOption: 'post' | 'schedule' | 'download' | '';
   scheduledDate?: Date;
@@ -256,7 +265,10 @@ export const UploadScreen: React.FC = () => {
   const [uploadState, setUploadState] = useState<UploadState>({
     sourceLanguage: '',
     caption: '',
+    translationType: '',
     targetLanguages: [],
+    includeSubtitles: false,
+    subtitleData: {},
     translateCaptions: false,
     deliveryOption: '',
   });
@@ -559,424 +571,252 @@ export const UploadScreen: React.FC = () => {
       lang.name.toLowerCase().includes(languageSearch.toLowerCase())
     );
 
-  const renderStep2 = () => {
-    if (!selectedVideo) return null;
+  const renderStep1 = () => {
+    return (
+      <View style={[styles.inputContainer, {
+        backgroundColor: colors.surface,
+        borderColor: colors.cardBorder
+      }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Choose Translation Type</Text>
+        
+        <View style={styles.translationOptions}>
+          <TouchableOpacity
+            style={[
+              styles.translationOption,
+              uploadState.translationType === 'dubbing' && styles.selectedTranslationOption,
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: uploadState.translationType === 'dubbing' ? colors.primary : colors.border
+              }
+            ]}
+            onPress={() => {
+              setUploadState(prev => ({ ...prev, translationType: 'dubbing' }));
+              goToNextStep();
+            }}
+          >
+            <View style={styles.translationIconContainer}>
+              <MaterialCommunityIcons
+                name="account-voice"
+                size={32}
+                color={uploadState.translationType === 'dubbing' ? colors.primary : colors.text}
+              />
+            </View>
+            <Text style={[
+              styles.translationTitle,
+              { color: uploadState.translationType === 'dubbing' ? colors.primary : colors.text }
+            ]}>
+              Dubbing
+            </Text>
+            <Text style={[styles.translationDescription, { color: colors.textSecondary }]}>
+              Translate voice to other languages
+            </Text>
+            <Text style={[styles.translationPricing, { color: colors.textSecondary }]}>
+              1 credit per language
+            </Text>
+          </TouchableOpacity>
 
+          <TouchableOpacity
+            style={[
+              styles.translationOption,
+              uploadState.translationType === 'subtitles' && styles.selectedTranslationOption,
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: uploadState.translationType === 'subtitles' ? colors.primary : colors.border
+              }
+            ]}
+            onPress={() => {
+              setUploadState(prev => ({ ...prev, translationType: 'subtitles' }));
+              goToNextStep();
+            }}
+          >
+            <View style={styles.translationIconContainer}>
+              <MaterialCommunityIcons
+                name="subtitles-outline"
+                size={32}
+                color={uploadState.translationType === 'subtitles' ? colors.primary : colors.text}
+              />
+            </View>
+            <Text style={[
+              styles.translationTitle,
+              { color: uploadState.translationType === 'subtitles' ? colors.primary : colors.text }
+            ]}>
+              Subtitles
+            </Text>
+            <Text style={[styles.translationDescription, { color: colors.textSecondary }]}>
+              Add translated subtitles
+            </Text>
+            <Text style={[styles.translationPricing, { color: colors.textSecondary }]}>
+              0.2 credits per language
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.translationOption,
+              uploadState.translationType === 'schedule' && styles.selectedTranslationOption,
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: uploadState.translationType === 'schedule' ? colors.primary : colors.border
+              }
+            ]}
+            onPress={() => {
+              setUploadState(prev => ({ ...prev, translationType: 'schedule' }));
+              goToNextStep();
+            }}
+          >
+            <View style={styles.translationIconContainer}>
+              <MaterialCommunityIcons
+                name="calendar-clock"
+                size={32}
+                color={uploadState.translationType === 'schedule' ? colors.primary : colors.text}
+              />
+            </View>
+            <Text style={[
+              styles.translationTitle,
+              { color: uploadState.translationType === 'schedule' ? colors.primary : colors.text }
+            ]}>
+              Schedule Only
+            </Text>
+            <Text style={[styles.translationDescription, { color: colors.textSecondary }]}>
+              Schedule posts without translation
+            </Text>
+            <Text style={[styles.translationPricing, { color: colors.textSecondary }]}>
+              No credits needed
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderStep2 = () => {
     return (
       <>
-        {renderVideoPreview()}
-        
-        <View style={[styles.inputContainer, {
-          backgroundColor: colors.surface,
-          borderColor: colors.cardBorder
-        }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Source Language</Text>
-          
-          <View style={[styles.searchContainer, { 
-            backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6'
-          }]}>
-            <MaterialCommunityIcons name="magnify" size={20} color={colors.textSecondary} />
-            <TextInput
-              style={[styles.searchInput, { color: colors.text }]}
-              placeholder="Search languages..."
-              placeholderTextColor={colors.textSecondary}
-              value={languageSearch}
-              onChangeText={setLanguageSearch}
-            />
-            {languageSearch ? (
-              <TouchableOpacity
-                style={styles.clearButton}
-                onPress={() => setLanguageSearch('')}
-              >
-                <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            ) : null}
-          </View>
+        {selectedVideo ? (
+          <>
+            {renderVideoPreview()}
+            
+            <View style={[styles.inputContainer, {
+              backgroundColor: colors.surface,
+              borderColor: colors.cardBorder
+            }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Source Language</Text>
+              
+              <View style={[styles.searchContainer, { 
+                backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6'
+              }]}>
+                <MaterialCommunityIcons name="magnify" size={20} color={colors.textSecondary} />
+                <TextInput
+                  style={[styles.searchInput, { color: colors.text }]}
+                  placeholder="Search languages..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={languageSearch}
+                  onChangeText={setLanguageSearch}
+                />
+                {languageSearch ? (
+                  <TouchableOpacity
+                    style={styles.clearButton}
+                    onPress={() => setLanguageSearch('')}
+                  >
+                    <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
 
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.languageScroll}
-          >
-            {filteredSourceLanguages.map((lang) => (
-              <TouchableOpacity
-                key={lang.code}
-                style={[
-                  styles.languageButton,
-                  uploadState.sourceLanguage === lang.code && {
-                    backgroundColor: colors.primary,
-                    borderColor: colors.primary
-                  }
-                ]}
-                onPress={() => handleSourceLanguageChange(lang.code)}
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.languageScroll}
               >
-                <Text style={[
-                  styles.languageButtonText,
-                  { color: uploadState.sourceLanguage === lang.code ? '#FFFFFF' : colors.text }
-                ]}>
-                  {lang.name}
+                {filteredSourceLanguages.map((lang) => (
+                  <TouchableOpacity
+                    key={lang.code}
+                    style={[
+                      styles.languageButton,
+                      uploadState.sourceLanguage === lang.code && {
+                        backgroundColor: colors.primary,
+                        borderColor: colors.primary
+                      }
+                    ]}
+                    onPress={() => handleSourceLanguageChange(lang.code)}
+                  >
+                    <Text style={[
+                      styles.languageButtonText,
+                      { color: uploadState.sourceLanguage === lang.code ? '#FFFFFF' : colors.text }
+                    ]}>
+                      {lang.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={[styles.inputContainer, {
+              backgroundColor: colors.surface,
+              borderColor: colors.cardBorder
+            }]}>
+              <View style={styles.captionHeader}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Caption</Text>
+                <Text style={[styles.characterCount, { color: colors.textSecondary }]}>
+                  {uploadState.caption.length}/2200
                 </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        <View style={[styles.inputContainer, {
-          backgroundColor: colors.surface,
-          borderColor: colors.cardBorder
-        }]}>
-          <View style={styles.captionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Caption</Text>
-            <Text style={[styles.characterCount, { color: colors.textSecondary }]}>
-              {uploadState.caption.length}/2200
+              </View>
+              <TextInput
+                style={[styles.captionInput, { 
+                  color: colors.text,
+                  backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6'
+                }]}
+                placeholder="Write a caption..."
+                placeholderTextColor={colors.textSecondary}
+                value={uploadState.caption}
+                onChangeText={handleCaptionChange}
+                multiline
+                maxLength={2200}
+                textAlignVertical="top"
+              />
+            </View>
+          </>
+        ) : (
+          <View style={[styles.uploadArea, { 
+            backgroundColor: colors.surface,
+            borderColor: colors.border
+          }]}>
+            <MaterialCommunityIcons 
+              name="cloud-upload-outline" 
+              size={48} 
+              color={colors.primary} 
+            />
+            <Text style={[styles.uploadTitle, { color: colors.text }]}>
+              Select a Video to {uploadState.translationType === 'dubbing' ? 'Dub' : uploadState.translationType === 'subtitles' ? 'Subtitle' : 'Schedule'}
             </Text>
+            <Text style={[styles.uploadSubtitle, { color: colors.textSecondary }]}>
+              Upload an MP4 or MOV file (max 90 seconds)
+            </Text>
+            <Button
+              title="Select Video"
+              onPress={pickVideo}
+              variant="primary"
+              leftIcon="video-plus"
+            />
           </View>
-          <TextInput
-            style={[styles.captionInput, { 
-              color: colors.text,
-              backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6'
-            }]}
-            placeholder="Write a caption..."
-            placeholderTextColor={colors.textSecondary}
-            value={uploadState.caption}
-            onChangeText={handleCaptionChange}
-            multiline
-            maxLength={2200}
-            textAlignVertical="top"
-          />
-        </View>
+        )}
 
         <View style={styles.footer}>
           <Button
             title="Continue"
             onPress={goToNextStep}
             variant="primary"
-            disabled={!uploadState.sourceLanguage}
+            disabled={!selectedVideo || !uploadState.sourceLanguage}
           />
         </View>
       </>
     );
   };
 
-  const startDubbing = async () => {
-    if (!selectedVideo) return;
-
-    // Check network connectivity
-    const networkState = await NetInfo.fetch();
-    if (!networkState.isConnected) {
-      Alert.alert('No Connection', 'Please check your internet connection and try again.');
-      return;
-    }
-
-    // Validate minimum requirements
-    if (uploadState.targetLanguages.length === 0) {
-      Alert.alert('No Languages Selected', 'Please select at least one target language.');
-      return;
-    }
-
-    // Check available credits
-    const requiredCredits = uploadState.targetLanguages.length;
-    if (currentTierData.availableCredits < requiredCredits) {
-      Alert.alert(
-        'Insufficient Credits',
-        `You need ${requiredCredits} credits to generate dubs in ${uploadState.targetLanguages.length} languages. Please upgrade your plan or purchase more credits.`
-      );
-      return;
-    }
-
-    setDubbingProgress(prev => ({
-      ...prev,
-      status: 'starting',
-      progress: 0,
-      error: null,
-      languageProgress: uploadState.targetLanguages.reduce((acc, lang) => ({
-        ...acc,
-        [lang]: { status: 'pending', progress: 0 }
-      }), {})
-    }));
-
-    try {
-      // Start upload
-      setDubbingProgress(prev => ({
-        ...prev,
-        status: 'uploading',
-        progress: 0
-      }));
-
-      // Log auth state before request
-      console.log('📝 Fetching auth session...');
-      const session = await fetchAuthSession();
-      console.log('🔑 Auth Session Details:', {
-        hasTokens: !!session.tokens,
-        tokenTypes: session.tokens ? Object.keys(session.tokens) : [],
-        identityId: session.identityId
-      });
-
-      if (!session.tokens?.accessToken) {
-        console.error('❌ No access token found in session');
-        throw new Error('No valid access token found');
-      }
-
-      // Add detailed token logging and validation
-      const accessToken = session.tokens.accessToken;
-      const tokenPayload = accessToken.payload;
-      
-      console.log('🎟️ Full Token Details:', {
-        rawToken: accessToken.toString(),
-        payload: tokenPayload
-      });
-      
-      // Validate token expiration
-      const now = Math.floor(Date.now() / 1000);
-      if (!tokenPayload.exp) {
-        console.error('❌ Token missing expiration');
-        throw new Error('Invalid token - missing expiration');
-      }
-
-      if (tokenPayload.exp <= now) {
-        console.error('❌ Token has expired:', {
-          expiration: new Date(tokenPayload.exp * 1000).toISOString(),
-          now: new Date(now * 1000).toISOString()
-        });
-        throw new Error('Access token has expired');
-      }
-
-      // Validate token use and scope
-      if (tokenPayload.token_use !== 'access') {
-        console.error('❌ Invalid token_use:', tokenPayload.token_use);
-        throw new Error('Invalid token type - expected access token');
-      }
-
-      const requiredScope = 'aws.cognito.signin.user.admin';
-      const tokenScopes = tokenPayload.scope?.split(' ') || [];
-      
-      console.log('🔍 Token Validation:', {
-        tokenUse: tokenPayload.token_use,
-        expiration: new Date(tokenPayload.exp * 1000).toISOString(),
-        scopes: tokenScopes,
-        requiredScope,
-        hasRequiredScope: tokenScopes.includes(requiredScope)
-      });
-
-      if (!tokenScopes.includes(requiredScope)) {
-        console.error('❌ Missing required scope:', {
-          required: requiredScope,
-          available: tokenScopes
-        });
-        throw new Error('Token missing required scope');
-      }
-  
-      // Get upload URL using Amplify
-      console.log('📤 Making upload URL request:', {
-        endpoint: '/v1/videos',
-        method: 'POST',
-        body: {
-          fileName: selectedVideo.name,
-          fileType: selectedVideo.type
-        }
-      });
-
-      const { body: uploadData } = await post({
-        apiName: 'dubstudio',
-        path: '/v1/videos',
-        options: {
-          headers: {
-            Authorization: `Bearer ${accessToken.toString()}`
-          },
-          body: {
-            fileName: selectedVideo.name,
-            fileType: selectedVideo.type
-          }
-        }
-      }).response;
-
-      const { uploadUrl, videoId } = await uploadData.json() as {
-        uploadUrl: string;
-        videoId: string;
-      };
-
-      console.log('📥 Upload URL response received:', {
-        videoId,
-        uploadUrl: uploadUrl.substring(0, 50) + '...'
-      });
-
-      // Upload to S3 with progress tracking and retry logic
-      let uploadAttempts = 0;
-      const maxUploadAttempts = 3;
-
-      const uploadWithRetry = async (): Promise<void> => {
-        try {
-          const blob = await fetch(selectedVideo.uri).then(r => r.blob());
-          console.log('🚀 Starting S3 upload:', {
-            blobSize: blob.size,
-            blobType: blob.type,
-            uploadUrl: uploadUrl.substring(0, 50) + '...'
-          });
-
-          const xhr = new XMLHttpRequest();
-          
-          xhr.upload.onprogress = (event) => {
-            if (event.lengthComputable) {
-              const progress = Math.round((event.loaded / event.total) * 100);
-              console.log(`📊 Upload progress: ${progress}%`);
-              setDubbingProgress(prev => ({
-                ...prev,
-                progress
-              }));
-            }
-          };
-
-          await new Promise((resolve, reject) => {
-            xhr.onload = () => {
-              console.log('📡 Upload response:', {
-                status: xhr.status,
-                statusText: xhr.statusText,
-                headers: xhr.getAllResponseHeaders()
-              });
-              xhr.status === 200 ? resolve(null) : reject(new Error('Upload failed'));
-            };
-            xhr.onerror = () => {
-              console.error('❌ Upload XHR error:', {
-                status: xhr.status,
-                statusText: xhr.statusText,
-                headers: xhr.getAllResponseHeaders()
-              });
-              reject(new Error('Upload failed'));
-            };
-            xhr.open('PUT', uploadUrl);
-            xhr.setRequestHeader('Content-Type', selectedVideo.type);
-            xhr.send(blob);
-          });
-        } catch (error) {
-          if (uploadAttempts < maxUploadAttempts) {
-            uploadAttempts++;
-            await new Promise(resolve => setTimeout(resolve, Math.pow(2, uploadAttempts) * 1000));
-            return uploadWithRetry();
-          }
-          throw error;
-        }
-      };
-
-      await uploadWithRetry();
-
-      // Start processing
-      setDubbingProgress(prev => ({
-        ...prev,
-        status: 'processing',
-        progress: 0
-      }));
-
-      // Start processing with retries
-      let retryCount = 0;
-      const maxRetries = 3;
-
-      const pollStatus = async () => {
-        try {
-          const { body } = await get({
-            apiName: 'dubstudio',
-            path: `/v1/videos/${videoId}/status`,
-            options: {
-              headers: {
-                Authorization: `Bearer ${accessToken.toString()}`
-              }
-            }
-          }).response;
-
-          const status = await body.json() as {
-            status: 'completed' | 'failed' | 'processing';
-            progress: number;
-            error?: string;
-            languageProgress?: Record<string, {
-              status: 'pending' | 'processing' | 'completed' | 'failed';
-              progress: number;
-            }>;
-          };
-          
-          if (status.status === 'completed') {
-            setDubbingProgress(prev => ({
-              ...prev,
-              status: 'completed',
-              progress: 100,
-              languageProgress: status.languageProgress || prev.languageProgress
-            }));
-            return;
-          }
-
-          if (status.status === 'failed') {
-            throw new Error(status.error || 'Processing failed');
-          }
-
-          // Update progress
-          setDubbingProgress(prev => ({
-            ...prev,
-            status: status.status,
-            progress: status.progress || prev.progress,
-            languageProgress: status.languageProgress || prev.languageProgress
-          }));
-
-          // Continue polling with delay
-          setTimeout(pollStatus, 2000);
-        } catch (error) {
-          if (retryCount < maxRetries) {
-            retryCount++;
-            setTimeout(pollStatus, Math.pow(2, retryCount) * 1000);
-          } else {
-            setDubbingProgress(prev => ({
-              ...prev,
-              status: 'failed',
-              error: error instanceof Error ? error.message : 'An unknown error occurred'
-            }));
-          }
-        }
-      };
-
-      // Start processing
-      try {
-        const { body } = await post({
-          apiName: 'dubstudio',
-          path: `/v1/videos/${videoId}/process`,
-          options: {
-            headers: {
-              Authorization: `Bearer ${accessToken.toString()}`
-            },
-            body: {
-              sourceLanguage: uploadState.sourceLanguage,
-              targetLanguages: uploadState.targetLanguages,
-              caption: uploadState.caption,
-              translateCaptions: uploadState.translateCaptions
-            }
-          }
-        }).response;
-
-        if (!body) {
-          throw new Error('Failed to start processing');
-        }
-
-        // Start polling
-        pollStatus();
-      } catch (error) {
-        console.error('Processing error:', error);
-        setDubbingProgress(prev => ({
-          ...prev,
-          status: 'failed',
-          error: error instanceof Error ? error.message : 'An unknown error occurred'
-        }));
-      }
-    } catch (error) {
-      console.error('Dubbing error:', error);
-      setDubbingProgress(prev => ({
-        ...prev,
-        status: 'failed',
-        error: error instanceof Error ? error.message : 'An unknown error occurred'
-      }));
-    }
-  };
-
   const renderStep3 = () => {
     if (!selectedVideo) return null;
 
-    const videoCreditsNeeded = uploadState.targetLanguages.length;
-    const isProcessing = dubbingProgress.status === 'processing' || dubbingProgress.status === 'uploading';
+    const videoCreditsNeeded = uploadState.targetLanguages.length * (uploadState.translationType === 'dubbing' ? 1 : 0.2);
 
     return (
       <>
@@ -1039,50 +879,17 @@ export const UploadScreen: React.FC = () => {
           <View style={[styles.creditNotice, { backgroundColor: colors.cardBackground }]}>
             <MaterialCommunityIcons name="information" size={20} color={colors.primary} />
             <Text style={[styles.creditText, { color: colors.text }]}>
-              This will consume {videoCreditsNeeded} video {videoCreditsNeeded === 1 ? 'credit' : 'credits'}
+              This will consume {videoCreditsNeeded} {videoCreditsNeeded === 1 ? 'credit' : 'credits'}
             </Text>
           </View>
+        </View>
 
-          {dubbingProgress.status !== 'idle' && (
-            <View style={styles.progressContainer}>
-              <View style={styles.progressHeader}>
-                <Text style={[styles.progressTitle, { color: colors.text }]}>
-                  {dubbingProgress.status === 'uploading' ? 'Uploading Video...' :
-                   dubbingProgress.status === 'processing' ? 'Generating Dubs...' :
-                   dubbingProgress.status === 'completed' ? 'Dubbing Complete!' :
-                   'Dubbing Failed'}
-                </Text>
-                <Text style={[styles.progressPercent, { color: colors.primary }]}>
-                  {Math.round(dubbingProgress.progress)}%
-                </Text>
-              </View>
-              
-              <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
-                <View 
-                  style={[
-                    styles.progressFill,
-                    { 
-                      backgroundColor: colors.primary,
-                      width: `${dubbingProgress.progress}%`,
-                    }
-                  ]} 
-                />
-              </View>
-
-              {dubbingProgress.error && (
-                <Text style={[styles.errorText, { color: colors.error }]}>
-                  {dubbingProgress.error}
-                </Text>
-              )}
-            </View>
-          )}
-
+        <View style={styles.footer}>
           <Button
-            title={isProcessing ? "Processing..." : "Generate Dubs"}
-            onPress={startDubbing}
+            title="Continue"
+            onPress={goToNextStep}
             variant="primary"
-            leftIcon="video-plus"
-            disabled={uploadState.targetLanguages.length === 0 || isProcessing}
+            disabled={uploadState.targetLanguages.length === 0}
           />
         </View>
       </>
@@ -1367,21 +1174,7 @@ export const UploadScreen: React.FC = () => {
                 contentContainerStyle={styles.scrollContainer}
               >
                 {currentStep === 1 ? (
-                  !selectedVideo ? (
-                    renderUploadArea()
-                  ) : (
-                    <>
-                      {renderVideoPreview()}
-                      <View style={styles.footer}>
-                        <Button
-                          title="Continue"
-                          onPress={goToNextStep}
-                          variant="primary"
-                          disabled={!selectedVideo.thumbnailUri}
-                        />
-                      </View>
-                    </>
-                  )
+                  renderStep1()
                 ) : currentStep === 2 ? (
                   renderStep2()
                 ) : currentStep === 3 ? (
@@ -1682,5 +1475,32 @@ const styles = StyleSheet.create({
   errorText: {
     marginTop: 8,
     fontSize: 14,
+  },
+  translationOptions: {
+    gap: 16,
+  },
+  translationOption: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 20,
+  },
+  selectedTranslationOption: {
+    borderWidth: 2,
+  },
+  translationIconContainer: {
+    marginBottom: 16,
+  },
+  translationTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  translationDescription: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  translationPricing: {
+    fontSize: 13,
+    fontWeight: '500',
   },
 }); 
