@@ -9,6 +9,7 @@ console.log('Loading environment from:', envPath);
 dotenv.config({ path: envPath });
 
 const BUNDLE_IDENTIFIER = 'tech.voxium.dubstudio';
+const SCHEME = 'dubstudio';
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   // Log loaded environment variables
@@ -28,6 +29,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
+    scheme: SCHEME,
     splash: {
       image: './assets/splash-icon.png',
       resizeMode: 'contain',
@@ -48,7 +50,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           {
             CFBundleURLSchemes: [
               'fb1125481698703055',
-              'voxium'
+              SCHEME
             ]
           }
         ],

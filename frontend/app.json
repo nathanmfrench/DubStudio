@@ -18,7 +18,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.voxium.dubstudio",
+      "bundleIdentifier": "tech.voxium.dubstudio",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "DubStudio needs access to your media library to upload videos for translation and posting.",
         "NSPhotoLibraryAddUsageDescription": "DubStudio needs access to save translated videos to your media library.",
@@ -30,7 +30,7 @@
         "foregroundImage": "./src/assets/app-icon.png",
         "backgroundColor": "#1F1F1F"
       },
-      "package": "com.voxium.dubstudio",
+      "package": "tech.voxium.dubstudio",
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
