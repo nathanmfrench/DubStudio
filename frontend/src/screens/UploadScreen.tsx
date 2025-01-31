@@ -259,9 +259,7 @@ export const UploadScreen: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
   const { isAuthenticated, user } = useAuth();
   const [selectedVideo, setSelectedVideo] = useState<VideoSelection | null>(null);
-  const [useDefaultThumbnail, setUseDefaultThumbnail] = useState(true);
   const [currentStep, setCurrentStep] = useState(1);
-  const [animation] = useState(new Animated.Value(0));
   const [uploadState, setUploadState] = useState<UploadState>({
     sourceLanguage: '',
     caption: '',
@@ -274,14 +272,6 @@ export const UploadScreen: React.FC = () => {
   });
   const [languageSearch, setLanguageSearch] = useState('');
   const [dubbingProgress, setDubbingProgress] = useState<DubbingProgress>(initialDubbingProgress);
-
-  useEffect(() => {
-    Animated.timing(animation, {
-      toValue: useDefaultThumbnail ? 0 : 1,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
-  }, [useDefaultThumbnail]);
 
   const pickVideo = async () => {
     try {
@@ -337,31 +327,13 @@ export const UploadScreen: React.FC = () => {
           return;
         }
 
-        try {
-          const { uri: thumbnailUri } = await VideoThumbnails.getThumbnailAsync(asset.uri, {
-            time: 0,
-            quality: 0.5,
-          });
-
-          setSelectedVideo({
-            name: asset.fileName || 'video',
-            uri: asset.uri,
-            duration: durationInSeconds,
-            type: 'video/mp4',
-            size: asset.fileSize || 0,
-            thumbnailUri,
-          });
-          setUseDefaultThumbnail(true);
-        } catch (error) {
-          console.error('Error generating thumbnail:', error);
-          setSelectedVideo({
-            name: asset.fileName || 'video',
-            uri: asset.uri,
-            duration: durationInSeconds,
-            type: 'video/mp4',
-            size: asset.fileSize || 0,
-          });
-        }
+        setSelectedVideo({
+          name: asset.fileName || 'video',
+          uri: asset.uri,
+          duration: durationInSeconds,
+          type: 'video/mp4',
+          size: asset.fileSize || 0,
+        });
       }
     } catch (error) {
       console.error('Error picking video:', error);
@@ -370,15 +342,13 @@ export const UploadScreen: React.FC = () => {
   };
 
   const pickThumbnail = async () => {
-    if (useDefaultThumbnail) return;
-    
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (!permission.granted) {
         Alert.alert(
           "Permission Required",
-          "DubStudio needs access to your media library to upload thumbnails.",
+          "DubStudio needs access to your media library to select a thumbnail.",
           [
             {
               text: "Open Settings",
@@ -398,17 +368,16 @@ export const UploadScreen: React.FC = () => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [16, 9],
         quality: 1,
       });
 
       if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
         setSelectedVideo(prev => prev ? {
           ...prev,
-          thumbnailUri: asset.uri
+          thumbnailUri: result.assets[0].uri
         } : null);
       }
     } catch (error) {
@@ -425,6 +394,13 @@ export const UploadScreen: React.FC = () => {
         backgroundColor: colors.surface,
         borderColor: colors.cardBorder
       }]}>
+        {selectedVideo.thumbnailUri && (
+          <Image
+            source={{ uri: selectedVideo.thumbnailUri }}
+            style={styles.videoThumbnail}
+            resizeMode="cover"
+          />
+        )}
         <View style={styles.videoDetails}>
           <MaterialCommunityIcons name="video" size={24} color={colors.primary} />
           <View style={styles.videoInfo}>
@@ -439,62 +415,16 @@ export const UploadScreen: React.FC = () => {
             <MaterialCommunityIcons name="pencil" size={20} color={colors.primary} />
           </TouchableOpacity>
         </View>
-
-        {selectedVideo.thumbnailUri && (
-          <Image
-            source={{ uri: selectedVideo.thumbnailUri }}
-            style={styles.videoThumbnail}
-            resizeMode="cover"
-          />
-        )}
-
         <View style={styles.thumbnailOptions}>
-          <View style={styles.thumbnailToggle}>
-            <Text style={[styles.toggleLabel, { color: colors.textSecondary }]}>Use Custom Thumbnail</Text>
-            <Switch
-              value={!useDefaultThumbnail}
-              onValueChange={(value) => {
-                setUseDefaultThumbnail(!value);
-                if (!value && selectedVideo.uri) {
-                  VideoThumbnails.getThumbnailAsync(selectedVideo.uri, {
-                    time: 0,
-                    quality: 0.5,
-                  }).then(({ uri }) => {
-                    setSelectedVideo(prev => prev ? {
-                      ...prev,
-                      thumbnailUri: uri
-                    } : null);
-                  }).catch(error => {
-                    console.error('Error generating default thumbnail:', error);
-                  });
-                }
-              }}
-              trackColor={{ false: isDarkMode ? '#374151' : '#E5E7EB', true: colors.primaryLight }}
-              thumbColor={!useDefaultThumbnail ? colors.primary : (isDarkMode ? '#9CA3AF' : '#6B7280')}
-            />
-          </View>
-
-          <Animated.View style={{
-            maxHeight: animation.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 48]
-            }),
-            opacity: animation,
-            transform: [{
-              translateY: animation.interpolate({
-                inputRange: [0, 1],
-                outputRange: [-10, 0]
-              })
-            }],
-            overflow: 'hidden',
-          }}>
-            <Button
-              title="Upload Custom Thumbnail"
-              onPress={pickThumbnail}
-              variant="primary"
-              leftIcon="image-plus"
-            />
-          </Animated.View>
+          <TouchableOpacity
+            style={[styles.thumbnailButton, { backgroundColor: colors.primary }]}
+            onPress={pickThumbnail}
+          >
+            <MaterialCommunityIcons name="image" size={20} color="#FFFFFF" />
+            <Text style={styles.thumbnailButtonText}>
+              {selectedVideo.thumbnailUri ? 'Change Thumbnail' : 'Add Custom Thumbnail'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -577,7 +507,7 @@ export const UploadScreen: React.FC = () => {
         backgroundColor: colors.surface,
         borderColor: colors.cardBorder
       }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Choose Translation Type</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Choose a Translation Type</Text>
         
         <View style={styles.translationOptions}>
           <TouchableOpacity
@@ -1089,7 +1019,6 @@ export const UploadScreen: React.FC = () => {
                 <Text style={[styles.reviewValue, { color: colors.text }]}>
                   {[
                     uploadState.translateCaptions ? 'Translate captions' : null,
-                    !useDefaultThumbnail ? 'Custom thumbnail' : null
                   ].filter(Boolean).join(', ') || 'Default settings'}
                 </Text>
               </View>
@@ -1254,6 +1183,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     overflow: 'hidden',
+    marginBottom: 16,
   },
   videoDetails: {
     flexDirection: 'row',
@@ -1281,13 +1211,18 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 16,
   },
-  thumbnailToggle: {
+  thumbnailButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
   },
-  toggleLabel: {
+  thumbnailButtonText: {
     fontSize: 14,
+    fontWeight: '500',
+    color: '#FFFFFF',
   },
   footer: {
     marginTop: 24,
