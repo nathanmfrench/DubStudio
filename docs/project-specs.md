@@ -1,4 +1,6 @@
 todo:
+ok: for the subtitles the file needs to be ported over from the other directory. I think the strategy would be to send the SRT file into an LLM instead of having it go to AWS translate.
+
 step 4 should be different depending on what the user selected in the first step. if they chose schedule, it should have options to schedule the post. if they chose dub or sub, it should have options to do those as well.
 
 simplify page to just be upload video and source language and caption, instead of video select individually -> video preview with src language and the caption
