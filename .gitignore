@@ -219,3 +219,5 @@ rootkey.csv
 ffmpeg.zip
 
 test.mp4
+
+infrastructure/lambda/layers/ffmpeg
