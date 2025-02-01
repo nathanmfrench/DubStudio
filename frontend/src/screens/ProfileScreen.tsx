@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform, Dimensions, Alert, ActivityIndicator, Modal, Animated } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform, Dimensions, Alert, ActivityIndicator, Modal, Animated, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
@@ -28,6 +28,8 @@ export function ProfileScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [isAnnual, setIsAnnual] = useState(false);
   const textOpacity = useState(new Animated.Value(1))[0];
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -41,6 +43,28 @@ export function ProfileScreen() {
       );
     } finally {
       setIsSigningOut(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText.toLowerCase() !== 'confirm') {
+      Alert.alert('Error', 'Please type "confirm" to delete your account');
+      return;
+    }
+
+    try {
+      // TODO: Implement actual account deletion API call here
+      await signOut();
+      Alert.alert('Account Deleted', 'Your account has been successfully deleted.');
+    } catch (error: any) {
+      console.error('Error deleting account:', error);
+      Alert.alert(
+        'Delete Failed',
+        error.message || 'Failed to delete account. Please try again.'
+      );
+    } finally {
+      setShowDeleteConfirm(false);
+      setDeleteConfirmText('');
     }
   };
 
@@ -200,10 +224,10 @@ export function ProfileScreen() {
             'Get help with DubStudio'
           )}
           {renderSettingsItem(
-            'theme-light-dark',
-            'Dark Mode',
-            'Toggle dark theme',
-            toggleTheme
+            'delete-forever',
+            'Delete Account',
+            'Permanently delete your account',
+            () => setShowDeleteConfirm(true)
           )}
           {renderSettingsItem(
             'logout',
@@ -211,6 +235,60 @@ export function ProfileScreen() {
             'Sign out of your account',
             handleSignOut
           )}
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderDeleteConfirmModal = () => (
+    <Modal
+      animationType="fade"
+      transparent={true}
+      visible={showDeleteConfirm}
+      onRequestClose={() => setShowDeleteConfirm(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContent, { 
+          backgroundColor: colors.background,
+          borderTopColor: colors.border,
+          padding: 20,
+        }]}>
+          <Text style={[styles.modalTitle, { color: colors.text, marginBottom: 16 }]}>
+            Delete Account
+          </Text>
+          <Text style={[styles.deleteWarning, { color: colors.error }]}>
+            Warning: This action cannot be undone. All your data will be permanently deleted.
+          </Text>
+          <Text style={[styles.deleteInstructions, { color: colors.text, marginTop: 16 }]}>
+            Type "confirm" to delete your account:
+          </Text>
+          <TextInput
+            style={[styles.deleteInput, { 
+              backgroundColor: colors.surface,
+              color: colors.text,
+              borderColor: colors.border
+            }]}
+            value={deleteConfirmText}
+            onChangeText={setDeleteConfirmText}
+            placeholder="Type 'confirm'"
+            placeholderTextColor={colors.textSecondary}
+            autoCapitalize="none"
+          />
+          <View style={styles.deleteActions}>
+            <Button
+              title="Cancel"
+              onPress={() => {
+                setShowDeleteConfirm(false);
+                setDeleteConfirmText('');
+              }}
+              variant="secondary"
+            />
+            <Button
+              title="Delete Account"
+              onPress={handleDeleteAccount}
+              variant="primary"
+            />
+          </View>
         </View>
       </View>
     </Modal>
@@ -301,6 +379,7 @@ export function ProfileScreen() {
         </View>
 
         {renderSettingsModal()}
+        {renderDeleteConfirmModal()}
       </View>
     </SafeAreaView>
   );
@@ -581,5 +660,26 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     padding: 6,
+  },
+  deleteWarning: {
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  deleteInstructions: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  deleteInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  deleteActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
   },
 }); 

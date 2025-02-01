@@ -1,21 +1,71 @@
-import { Handler } from 'aws-lambda';
+import { Handler, APIGatewayProxyEvent } from 'aws-lambda';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { success, error, AuthenticatedEvent } from '../types/api';
+import { S3 } from 'aws-sdk';
 
 const lambdaClient = new LambdaClient({});
 const dynamodbClient = new DynamoDBClient({});
 const dynamodb = DynamoDBDocumentClient.from(dynamodbClient);
-const BUCKET_NAME = process.env.BUCKET_NAME || '';
 const VIDEOS_TABLE_NAME = process.env.VIDEOS_TABLE_NAME || '';
 const DUBBING_FUNCTION_NAME = process.env.DUBBING_FUNCTION_NAME || '';
+const SUBTITLE_FUNCTION_NAME = process.env.SUBTITLE_FUNCTION_NAME!;
+const s3 = new S3();
 
-export const handler: Handler<AuthenticatedEvent> = async (event) => {
+if (!process.env.SUBTITLE_FUNCTION_NAME) {
+  throw new Error('SUBTITLE_FUNCTION_NAME environment variable not set');
+}
+
+// Mock video processor (keep this until real implementation)
+async function processVideoContent(input: Buffer): Promise<Buffer> {
+  return Buffer.from(`PROCESSED: ${input.toString('utf-8')}`);
+}
+
+// Core processing logic
+async function handleVideoProcessing(userId: string, videoId: string): Promise<void> {
+  // 1. Retrieve raw video
+  const getParams = {
+    Bucket: 'dubstudio-raw-videos',
+    Key: `uploads/${userId}/${videoId}/original.mp4`
+  };
+  
+  const rawData = await s3.getObject(getParams).promise();
+  if (!rawData.Body) throw new Error('Empty video file');
+
+  // 2. Process content
+  const processedBuffer = await processVideoContent(rawData.Body as Buffer);
+
+  // 3. Store processed video
+  const putParams = {
+    Bucket: 'dubstudio-processed-videos',
+    Key: `videos/${userId}/${videoId}/final.mp4`,
+    Body: processedBuffer
+  };
+  await s3.putObject(putParams).promise();
+
+  // 4. Cleanup raw file
+  await Promise.all([
+    // Raw file
+    s3.deleteObject({
+      Bucket: 'dubstudio-raw-videos',
+      Key: `uploads/${userId}/${videoId}/original.mp4`
+    }).promise(),
+    
+    // Processed file
+    s3.deleteObject({
+      Bucket: 'dubstudio-processed-videos',
+      Key: `videos/${userId}/${videoId}/final.mp4`
+    }).promise()
+  ]);
+}
+
+// Lambda entry point
+export const handler: Handler<APIGatewayProxyEvent> = async (event, context) => {
   console.log({
     stage: 'START',
-    functionName: 'process-handler',
-    requestId: event.requestContext.requestId,
+    functionName: 'process-handler',  
+    requestId: context.awsRequestId,
     timestamp: new Date().toISOString(),
     event: {
       path: event.path,
@@ -25,170 +75,67 @@ export const handler: Handler<AuthenticatedEvent> = async (event) => {
   });
 
   try {
-    const videoId = event.pathParameters?.videoId;
-    if (!videoId) {
-      console.log({
-        stage: 'ERROR',
-        error: 'Missing videoId parameter',
-        pathParameters: event.pathParameters,
-        timestamp: new Date().toISOString()
-      });
-      return error(400, 'Missing videoId parameter');
-    }
+    // Extract user context
+    const userId = event.requestContext?.authorizer?.userId 
+                   || event.headers?.['x-user-id'];
+    if (!userId) return error(401, 'Unauthorized');
 
-    // Get user ID from Cognito claims
-    const userId = event.requestContext.authorizer?.claims.sub;
-    if (!userId) {
-      console.log({
-        stage: 'ERROR',
-        error: 'Unauthorized - Missing user ID',
-        timestamp: new Date().toISOString()
-      });
-      return error(401, 'Unauthorized');
-    }
+    // Add proper body parsing
+    const body = typeof event.body === 'string' ? 
+      JSON.parse(event.body) : 
+      event.body || event;
+    
+    // Add path parameter fallback
+    const videoId = body.videoId || event.pathParameters?.videoId;
+    if (!videoId) return error(400, 'Missing videoId');
 
-    console.log({
-      stage: 'PROCESSING',
-      action: 'fetch_video_details',
-      userId,
-      videoId,
-      tableName: VIDEOS_TABLE_NAME,
-      timestamp: new Date().toISOString()
-    });
-
-    // Get video details from DynamoDB
-    const result = await dynamodb.send(new GetCommand({
-      TableName: VIDEOS_TABLE_NAME,
-      Key: {
-        userId,
-        videoId
-      }
-    }));
-
-    if (!result.Item) {
-      console.log({
-        stage: 'ERROR',
-        error: 'Video not found',
-        userId,
-        videoId,
-        timestamp: new Date().toISOString()
-      });
-      return error(404, 'Video not found');
-    }
-
-    // Get source and target languages from request body
-    const body = event.body ? JSON.parse(event.body) : {};
-    const { sourceLanguage = 'en', targetLanguages, caption } = body;
-
-    console.log({
-      stage: 'PROCESSING',
-      action: 'parse_request_body',
-      body: {
-        sourceLanguage,
-        targetLanguages,
-        caption: caption ? 'present' : 'absent'
-      },
-      timestamp: new Date().toISOString()
-    });
-
-    if (!targetLanguages || !Array.isArray(targetLanguages) || targetLanguages.length === 0) {
-      console.log({
-        stage: 'ERROR',
-        error: 'Invalid target languages',
-        receivedValue: targetLanguages,
-        timestamp: new Date().toISOString()
-      });
-      return error(400, 'Missing or invalid targetLanguages in request body');
-    }
-
-    console.log({
-      stage: 'PROCESSING',
-      action: 'invoke_dubbing_functions',
-      targetLanguages,
-      dubbingFunction: DUBBING_FUNCTION_NAME,
-      timestamp: new Date().toISOString()
-    });
-
-    // Start a dubbing job for each target language
-    const dubbingPromises = targetLanguages.map(targetLanguage => {
-      const payload = {
-        userId,
-        videoId,
-        body: {
-          sourceLanguage,
-          targetLanguage,
-          caption
-        }
-      };
-
-      console.log({
-        stage: 'PROCESSING',
-        action: 'invoke_single_dubbing',
-        targetLanguage,
-        payload,
-        timestamp: new Date().toISOString()
-      });
-
-      const command = new InvokeCommand({
-        FunctionName: DUBBING_FUNCTION_NAME,
-        InvocationType: 'Event',
-        Payload: Buffer.from(JSON.stringify(payload))
-      });
-      return lambdaClient.send(command);
-    });
-
-    console.log({
-      stage: 'PROCESSING',
-      action: 'update_video_status',
-      videoId,
-      newStatus: 'PROCESSING',
-      timestamp: new Date().toISOString()
-    });
-
-    // Update video status to PROCESSING
-    await dynamodb.send(new UpdateCommand({
-      TableName: VIDEOS_TABLE_NAME,
-      Key: {
-        userId,
-        videoId
-      },
-      UpdateExpression: 'SET #status = :status, #updatedAt = :updatedAt REMOVE #error',
-      ExpressionAttributeNames: {
-        '#status': 'status',
-        '#updatedAt': 'updatedAt',
-        '#error': 'error'
-      },
-      ExpressionAttributeValues: {
-        ':status': 'PROCESSING',
-        ':updatedAt': new Date().toISOString()
-      }
-    }));
-
-    // Wait for all dubbing jobs to start
-    await Promise.all(dubbingPromises);
-
-    console.log({
-      stage: 'COMPLETE',
-      videoId,
-      status: 'success',
-      targetLanguages,
-      timestamp: new Date().toISOString()
-    });
-
-    return success({
-      message: 'Video processing started',
-      videoId,
-      status: 'PROCESSING',
-      targetLanguages
-    });
+    // Execute processing
+    await handleVideoProcessing(userId, videoId);
+    return success({ status: 'completed' });
 
   } catch (err) {
-    console.error({
-      stage: 'ERROR',
-      error: err instanceof Error ? err.message : 'Unknown error',
-      stack: err instanceof Error ? err.stack : undefined,
-      timestamp: new Date().toISOString()
-    });
-    return error(500, 'Error starting video processing');
+    console.error('Processing failed:', err);
+    return error(500, 'Error processing request');
+  }
+};
+
+const processVideo = async (userId: string, videoId: string) => {
+  try {
+    // Get object as buffer instead of stream
+    const { Body } = await s3.getObject({
+      Bucket: 'dubstudio-raw-videos',
+      Key: `uploads/${userId}/${videoId}/original.mp4`
+    }).promise();
+
+    if (!Body) throw new Error('Empty video file');
+    
+    // Process video buffer
+    const processedBuffer = await processVideoContent(Body as Buffer);
+    
+    // Upload to processed bucket
+    await s3.putObject({
+      Bucket: 'dubstudio-processed-videos',
+      Key: `videos/${userId}/${videoId}/final.mp4`,
+      Body: processedBuffer
+    }).promise();
+
+    // Delete immediately after processing
+    await Promise.all([
+      // Raw file
+      s3.deleteObject({
+        Bucket: 'dubstudio-raw-videos',
+        Key: `uploads/${userId}/${videoId}/original.mp4`
+      }).promise(),
+      
+      // Processed file
+      s3.deleteObject({
+        Bucket: 'dubstudio-processed-videos',
+        Key: `videos/${userId}/${videoId}/final.mp4`
+      }).promise()
+    ]);
+
+  } catch (err) {           
+    console.error('Processing failed:', err);
+    throw err; // Rethrow to mark as failed
   }
 }; 

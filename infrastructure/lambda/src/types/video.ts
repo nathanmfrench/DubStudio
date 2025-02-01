@@ -9,6 +9,9 @@ export interface VideoMetadata {
   sourceLanguage?: string;
   targetLanguages?: string[];
   dubbingIds?: { [key: string]: string }; // language -> dubbingId mapping
+  // Add to VideoMetadata interface
+  subtitleStatus?: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  subtitleFileKey?: string;
 }
 
 export type VideoStatus = 

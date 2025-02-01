@@ -9,10 +9,15 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import { Duration } from 'aws-cdk-lib';
+import * as iam from 'aws-cdk-lib/aws-iam';
 
 export class InfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    const env = process.env.CDK_ENV || 'dev';
+    const accountId = process.env.CDK_ACCOUNT_ID; // Your AWS account ID
 
     // Import the existing ElevenLabs API key secret
     const elevenLabsSecret = secretsmanager.Secret.fromSecretNameV2(
@@ -22,27 +27,47 @@ export class InfrastructureStack extends cdk.Stack {
     );
 
     // Create S3 bucket for video uploads with proper CORS
-    const videoBucket = new s3.Bucket(this, 'DubStudioVideoBucket', {
+    const bucket = new s3.Bucket(this, 'DubStudioStorage', {
+      bucketName: 'dubstudio-videos-dev', // Add your name/team
       versioned: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development only
-      autoDeleteObjects: true, // For development only
-      cors: [
+      lifecycleRules: [
         {
-          allowedMethods: [
-            s3.HttpMethods.GET,
-            s3.HttpMethods.PUT,
-            s3.HttpMethods.POST,
-          ],
-          allowedOrigins: ['*'], // Restrict this in production
-          allowedHeaders: ['*'],
-          exposedHeaders: [
-            'ETag',
-            'x-amz-server-side-encryption',
-            'x-amz-request-id',
-            'x-amz-id-2'
-          ],
-        },
+          expiration: Duration.days(30),
+          prefix: 'raw/',
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+              transitionAfter: Duration.days(30)
+            }
+          ]
+        }
       ],
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true
+    });
+
+    const rawBucket = new s3.Bucket(this, 'RawVideosBucket', {
+      bucketName: `dubstudio-raw-videos-${accountId}-${env}`,
+      lifecycleRules: [
+        // SIMPLE EXPIRATION ONLY
+        {
+          expiration: Duration.days(1),
+          prefix: 'uploads/',
+          noncurrentVersionExpiration: Duration.days(0), // Disable versioning
+          abortIncompleteMultipartUploadAfter: Duration.days(1),
+          enabled: true
+        }
+      ],
+      versioned: false // Critical - versioning can cause hidden transitions
+    });
+
+    const processedBucket = new s3.Bucket(this, 'ProcessedVideosBucket', {
+      bucketName: `dubstudio-processed-videos-${accountId}-${env}`,
+      lifecycleRules: [{
+        expiration: Duration.days(1),
+        prefix: 'videos/'
+      }]
     });
 
     // Create DynamoDB table for videos
@@ -111,7 +136,7 @@ export class InfrastructureStack extends cdk.Stack {
       logRetention: logs.RetentionDays.ONE_WEEK,
       environment: {
         NODE_ENV: 'production',
-        BUCKET_NAME: videoBucket.bucketName,
+        BUCKET_NAME: bucket.bucketName,
       },
       bundling: {
         minify: true,
@@ -168,33 +193,63 @@ export class InfrastructureStack extends cdk.Stack {
       memorySize: 1024,
       environment: {
         VIDEOS_TABLE_NAME: videosTable.tableName,
-        BUCKET_NAME: videoBucket.bucketName,
+        BUCKET_NAME: bucket.bucketName,
         ELEVENLABS_SECRET_NAME: elevenLabsSecret.secretName,
       },
     });
 
+    // 1. Define subtitle handler FIRST
+    const subtitleHandler = new lambda.Function(this, 'DubStudioSubtitleHandler', {
+      runtime: lambda.Runtime.PYTHON_3_9,
+      handler: 'subtitles.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/python')),
+      layers: [dubbingLayer],
+      timeout: cdk.Duration.minutes(15),
+      memorySize: 3008,
+      environment: {
+        VIDEOS_TABLE_NAME: videosTable.tableName,
+        BUCKET_NAME: bucket.bucketName, 
+      },
+    });
+
+    // 2. THEN define process handler
     const videoProcessHandler = new lambda.Function(this, 'DubStudioVideoProcessHandler', {
       ...commonLambdaConfig,
-      handler: 'videos/process.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/dist')),
+      handler: 'dist/videos/process.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda')),
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       environment: {
         ...commonLambdaConfig.environment,
         VIDEOS_TABLE_NAME: videosTable.tableName,
         DUBBING_FUNCTION_NAME: videoDubbingHandler.functionName,
+        SUBTITLE_FUNCTION_NAME: subtitleHandler.functionName
       },
     });
 
+    // 3. Add invocation permission
+    videoDubbingHandler.grantInvoke(videoProcessHandler);
+    subtitleHandler.grantInvoke(videoProcessHandler) // ✅ Allows process to trigger subtitle
     // Grant necessary permissions
-    videoBucket.grantReadWrite(videoUploadHandler);
-    videoBucket.grantReadWrite(videoDubbingHandler);
+    bucket.grantReadWrite(videoUploadHandler);
+    bucket.grantReadWrite(videoDubbingHandler);
     videosTable.grantReadWriteData(videoUploadHandler);
     videosTable.grantReadWriteData(videoStatusHandler);
     videosTable.grantReadWriteData(videoProcessHandler);
     videosTable.grantReadWriteData(videoDubbingHandler);
     elevenLabsSecret.grantRead(videoDubbingHandler);
-    videoDubbingHandler.grantInvoke(videoProcessHandler);
+    bucket.grantReadWrite(subtitleHandler);
+    videosTable.grantReadWriteData(subtitleHandler);
+
+    videoProcessHandler.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['s3:GetObject', 's3:DeleteObject'],
+      resources: [rawBucket.arnForObjects('uploads/*')]
+    }));
+
+    videoProcessHandler.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['s3:PutObject'],
+      resources: [processedBucket.arnForObjects('videos/*')]
+    }));
 
     // Create API Gateway with CORS
     const api = new apigateway.RestApi(this, 'DubStudioApi', {
