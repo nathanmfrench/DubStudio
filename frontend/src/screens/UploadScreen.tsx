@@ -957,6 +957,24 @@ export const UploadScreen: React.FC = () => {
           
           <View style={styles.reviewSection}>
             <View style={styles.reviewItem}>
+              <MaterialCommunityIcons 
+                name={uploadState.translationType === 'dubbing' ? 'account-voice' : 
+                     uploadState.translationType === 'subtitles' ? 'subtitles-outline' : 
+                     'calendar-clock'} 
+                size={20} 
+                color={colors.textSecondary} 
+              />
+              <View style={styles.reviewContent}>
+                <Text style={[styles.reviewLabel, { color: colors.textSecondary }]}>Translation Type</Text>
+                <Text style={[styles.reviewValue, { color: colors.text }]}>
+                  {uploadState.translationType === 'dubbing' ? 'Dubbing' :
+                   uploadState.translationType === 'subtitles' ? 'Subtitles' :
+                   'Schedule Only'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.reviewItem}>
               <MaterialCommunityIcons name="video" size={20} color={colors.textSecondary} />
               <View style={styles.reviewContent}>
                 <Text style={[styles.reviewLabel, { color: colors.textSecondary }]}>Video</Text>
