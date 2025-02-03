@@ -1,7 +1,7 @@
 todo:
 
-
-login works, but need to fix the confirmation email not getting sent
+possibly make specific scopes for each of the different lambda functions (technically safer)
+login works, but need to fix the confirmation email not getting sent (this stuff is all in authcontext.tsx)
 
 make sure that the s3 buckets contents are getting removed after 1 or 2 days since the videos are stored on instagram
 

@@ -41,7 +41,7 @@ export const amplifyConfig = {
     region: config.aws.region,
     userPoolWebClientId: config.aws.userPoolClientId,
     oauth: {
-      scope: ['email', 'openid'],
+      scope: ['email', 'openid', 'dubstudio/upload_video'],
       redirectSignIn: 'exp://localhost:19000/--/*', //these will have to be changed to the actual callback urls
       redirectSignOut: 'exp://localhost:19000/--/*', //these will have to be changed to the actual logout urls
       responseType: 'code'

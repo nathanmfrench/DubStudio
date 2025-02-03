@@ -30,7 +30,13 @@ export const handler = async (event: AuthenticatedEvent) => {
       headers: event.headers
     }
   });
-
+  const authScopes = event.requestContext.authorizer?.claims?.scope || '';
+  if (!authScopes.includes('dubstudio/upload_video')) {
+    return {
+      statusCode: 403,
+      body: JSON.stringify({ message: 'Missing required scope' })
+    };
+  }
   try {
     // Validate request method
     if (event.httpMethod !== 'POST') {

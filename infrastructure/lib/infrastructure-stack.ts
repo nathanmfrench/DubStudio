@@ -4,14 +4,12 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Duration } from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import { FlatListComponent } from 'react-native';
 
 export class InfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -171,20 +169,65 @@ export class InfrastructureStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN, // For development only
     });
 
-    // Create Cognito User Pool Client
-    const userPoolClient = new cognito.UserPoolClient(this, 'DubStudioClient', {
-      userPool,
-      authFlows: { userPassword: true },
-      oAuth: {
-        flows: { authorizationCodeGrant: true },
-        scopes: [cognito.OAuthScope.EMAIL, cognito.OAuthScope.OPENID],
-      },
-      supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
+    const apiResourceServer = userPool.addResourceServer('DubStudioAPI', {
+      identifier: 'dubstudio',
+      scopes: [
+        {
+          scopeName: 'upload_video',
+          scopeDescription: 'Permission to upload videos'
+        }
+      ]
     });
+
+    const videoUploadScope = new cognito.ResourceServerScope({
+      scopeName: 'video:upload',
+      scopeDescription: 'Permission to upload videos'
+    });
+
+    const videoProcessScope = new cognito.ResourceServerScope({
+      scopeName: 'video:process',
+      scopeDescription: 'Permission to process uploaded videos'
+    });
+    
+    const videoResourceServer = userPool.addResourceServer('VideoResourceServer', {
+      identifier: 'videos',
+      scopes: [videoUploadScope, videoProcessScope],
+      userPoolResourceServerName: 'DubStudio Video Services'
+    });
+
+
+    const userPoolClient = new cognito.UserPoolClient(this, 'DubStudioUserPoolClient', {
+      userPool,
+      authFlows: {
+        userPassword: true,
+        adminUserPassword: true,
+        userSrp: true,
+        custom: true
+      },
+      oAuth: {
+        flows: {
+          implicitCodeGrant: true,
+          authorizationCodeGrant: true
+        },
+        scopes: [
+          cognito.OAuthScope.OPENID,
+          cognito.OAuthScope.EMAIL,
+          cognito.OAuthScope.PROFILE,
+          cognito.OAuthScope.resourceServer(videoResourceServer, videoUploadScope),
+          cognito.OAuthScope.resourceServer(videoResourceServer, videoProcessScope)
+        ],
+      },
+      supportedIdentityProviders: [
+        cognito.UserPoolClientIdentityProvider.COGNITO
+      ],
+      generateSecret: false
+    });
+   
     const exampleLambdaLogGroup = new logs.LogGroup(this, 'ExampleLambdaLogGroup', {
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY // Optional: auto-delete logs on stack deletion
     });
+   
     // Common Lambda configuration
     const commonLambdaConfig = {
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -349,7 +392,7 @@ export class InfrastructureStack extends cdk.Stack {
     const defaultMethodOptions: apigateway.MethodOptions = {
       authorizer: apiAuthorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
-      authorizationScopes: ['email', 'openid'],
+      authorizationScopes: ['email', 'openid', 'videos/video:upload', 'videos/video:process'],
       methodResponses: [{
         statusCode: '200',
         responseParameters: {
@@ -372,6 +415,7 @@ export class InfrastructureStack extends cdk.Stack {
       'POST',
       new apigateway.LambdaIntegration(videoUploadHandler),
       defaultMethodOptions
+      
     );
 
     apiVideoStatus.addMethod(
