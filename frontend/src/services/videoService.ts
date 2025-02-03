@@ -34,9 +34,40 @@ class VideoService {
 
   async getUploadUrl(request: UploadVideoRequest): Promise<UploadVideoResponse> {
     try {
+      // Validate request
+      if (!request.fileName || !request.fileType) {
+        throw new Error('Missing required fields');
+      }
+  
       const token = await getAuthToken();
-      console.log('[VideoService] Auth token obtained:', token ? 'present' : 'missing'); // Debug log
-      
+      if (!token) {
+        throw new Error('Failed to obtain auth token');
+      }
+  
+      // Decode and log token info
+      try {
+        const tokenParts = token.split('.');
+        const tokenPayload = JSON.parse(atob(tokenParts[1]));
+        console.log('[VideoService] Token details:', {
+          exp: new Date(tokenPayload.exp * 1000),
+          isExpired: Date.now() >= tokenPayload.exp * 1000,
+          scopes: tokenPayload.scope,
+          iss: tokenPayload.iss,
+          sub: tokenPayload.sub
+        });
+      } catch (e) {
+        console.warn('[VideoService] Could not decode token:', e);
+      }
+  
+      console.log('[VideoService] Preparing request:', {
+        apiName: 'dubstudio',
+        path: '/v1/videos',
+        fileName: request.fileName,
+        fileType: request.fileType,
+        tokenPresent: !!token,
+        tokenPrefix: token.substring(0, 20) + '...'
+      });
+  
       const restOperation = post({
         apiName: 'dubstudio',
         path: '/v1/videos',
@@ -46,20 +77,45 @@ class VideoService {
             fileType: request.fileType
           },
           headers: {
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
           }
         }
       });
   
+      console.log('[VideoService] Request operation created');
+  
       const { body } = await restOperation.response;
-      const response = await body.json();
-      return response as unknown as UploadVideoResponse;
+      console.log('[VideoService] Response received');
+  
+      try {
+        const parsedResponse = await body.json();
+        console.log('[VideoService] Response parsed successfully:', {
+          responseKeys: parsedResponse ? Object.keys(parsedResponse) : [],
+          responseData: parsedResponse
+        });
+  
+        return parsedResponse as unknown as UploadVideoResponse;
+      } catch (parseError) {
+        console.error('[VideoService] Failed to parse response:', parseError);
+        const rawText = await body.text();
+        console.log('[VideoService] Raw response:', rawText);
+        throw parseError;
+      }
+  
     } catch (error) {
       console.error('[VideoService] Upload URL request failed:', {
         error,
         errorMessage: error instanceof Error ? error.message : 'Unknown error',
-        errorName: error instanceof Error ? error.name : 'Unknown type'
+        errorName: error instanceof Error ? error.name : 'Unknown type',
+        errorStack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
+        requestDetails: {
+          fileName: request.fileName,
+          fileType: request.fileType
+        }
       });
+  
       throw error;
     }
   }
