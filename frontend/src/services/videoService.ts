@@ -91,7 +91,7 @@ class VideoService {
       try {
         const parsedResponse = await body.json();
         console.log('[VideoService] Response parsed successfully:', {
-          responseKeys: parsedResponse ? Object.keys(parsedResponse) : [],
+          responseKeys: parsedResponse ? Object.keys(parsedResponse) : ["No responsekeys in parsedresponse (getuploadurl function)"],
           responseData: parsedResponse
         });
   
