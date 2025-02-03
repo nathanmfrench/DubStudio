@@ -34,6 +34,9 @@ class VideoService {
 
   async getUploadUrl(request: UploadVideoRequest): Promise<UploadVideoResponse> {
     try {
+      const token = await getAuthToken();
+      console.log('[VideoService] Auth token obtained:', token ? 'present' : 'missing'); // Debug log
+      
       const restOperation = post({
         apiName: 'dubstudio',
         path: '/v1/videos',
@@ -41,15 +44,22 @@ class VideoService {
           body: {
             fileName: request.fileName,
             fileType: request.fileType
+          },
+          headers: {
+            Authorization: `Bearer ${token}`
           }
         }
       });
-
+  
       const { body } = await restOperation.response;
       const response = await body.json();
       return response as unknown as UploadVideoResponse;
     } catch (error) {
-      console.error('Upload URL request failed:', error);
+      console.error('[VideoService] Upload URL request failed:', {
+        error,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorName: error instanceof Error ? error.name : 'Unknown type'
+      });
       throw error;
     }
   }

@@ -29,8 +29,31 @@ export class InfrastructureStack extends cdk.Stack {
 
     // Create S3 bucket for video uploads with proper CORS
     const bucket = new s3.Bucket(this, 'DubStudioStorage', {
-      bucketName: 'dubstudio-videos-dev', // Add your name/team
+      bucketName: `dubstudio-videos-${accountId}-${env}`,
       versioned: true,
+      cors: [{
+        allowedMethods: [
+          s3.HttpMethods.GET,
+          s3.HttpMethods.PUT,
+          s3.HttpMethods.POST,
+          s3.HttpMethods.DELETE,
+        ],
+        allowedOrigins: [
+          'http://localhost:19000',
+          'http://localhost:19001',
+          'exp://localhost:19000',
+          'exp://localhost:19001',
+        ],
+        allowedHeaders: ['*'],
+        exposedHeaders: [
+          'ETag',
+          'x-amz-server-side-encryption',
+          'x-amz-request-id',
+          'x-amz-id-2',
+          'Content-Type',
+          'Content-Length'
+        ],
+      }],
       lifecycleRules: [
         {
           expiration: Duration.days(30),
@@ -44,6 +67,28 @@ export class InfrastructureStack extends cdk.Stack {
 
     const rawBucket = new s3.Bucket(this, 'RawVideosBucket', {
       bucketName: `dubstudio-raw-videos-${accountId}-${env}`,
+      cors: [{
+        allowedMethods: [
+          s3.HttpMethods.GET,
+          s3.HttpMethods.PUT,
+          s3.HttpMethods.POST,
+        ],
+        allowedOrigins: [
+          'http://localhost:19000',
+          'http://localhost:19001',
+          'exp://localhost:19000',
+          'exp://localhost:19001',
+        ],
+        allowedHeaders: ['*'],
+        exposedHeaders: [
+          'ETag',
+          'x-amz-server-side-encryption',
+          'x-amz-request-id',
+          'x-amz-id-2',
+          'Content-Type',
+          'Content-Length'
+        ],
+      }],
       lifecycleRules: [
         {
           expiration: Duration.days(30),
@@ -51,15 +96,43 @@ export class InfrastructureStack extends cdk.Stack {
           abortIncompleteMultipartUploadAfter: Duration.days(1),
         }
       ],
-      versioned: false
+      versioned: false,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true
     });
 
     const processedBucket = new s3.Bucket(this, 'ProcessedVideosBucket', {
       bucketName: `dubstudio-processed-videos-${accountId}-${env}`,
+      cors: [{
+        allowedMethods: [
+          s3.HttpMethods.GET,
+          s3.HttpMethods.PUT,
+          s3.HttpMethods.POST,
+        ],
+        allowedOrigins: [
+          'http://localhost:19000',
+          'http://localhost:19001',
+          'exp://localhost:19000',
+          'exp://localhost:19001',
+        ],
+        allowedHeaders: ['*'],
+        exposedHeaders: [
+          'ETag',
+          'x-amz-server-side-encryption',
+          'x-amz-request-id',
+          'x-amz-id-2',
+          'Content-Type',
+          'Content-Length'
+        ],
+      }],
       lifecycleRules: [{
         expiration: Duration.days(30),
         prefix: 'videos/'
-      }]
+      }],
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true
     });
 
     // Create DynamoDB table for videos
@@ -245,16 +318,16 @@ export class InfrastructureStack extends cdk.Stack {
       restApiName: 'DubStudio API',
       description: 'API for DubStudio video processing',
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowOrigins: apigateway.Cors.ALL_ORIGINS, // Restrict in production
         allowMethods: apigateway.Cors.ALL_METHODS,
         allowHeaders: [
           'Content-Type',
-          'Authorization',
           'X-Amz-Date',
+          'Authorization',
           'X-Api-Key',
-          'X-Amz-Security-Token',
+          'X-Amz-Security-Token'
         ],
-        maxAge: cdk.Duration.days(1),
+        maxAge: cdk.Duration.days(1)
       },
       deployOptions: {
         stageName: 'prod',
@@ -343,5 +416,6 @@ export class InfrastructureStack extends cdk.Stack {
       value: this.region,
       description: 'The AWS Region',
     });
+
   }
 } 

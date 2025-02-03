@@ -1,5 +1,8 @@
 todo:
 
+
+login works, but need to fix the confirmation email not getting sent
+
 make sure that the s3 buckets contents are getting removed after 1 or 2 days since the videos are stored on instagram
 
 fix the upload URLs for downloading files locally since the URLs aer now subtitled_{video name which isn't perfect}
