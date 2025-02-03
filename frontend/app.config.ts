@@ -102,7 +102,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           isAutoInitEnabled: true,
           iosUserTrackingPermission: "This identifier will be used to deliver personalized ads to you."
         }
-      ]
+      ],
+      'expo-asset'
     ],
     extra: {
       EXPO_PUBLIC_ENVIRONMENT: process.env.EXPO_PUBLIC_ENVIRONMENT,

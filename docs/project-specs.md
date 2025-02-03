@@ -1,5 +1,10 @@
 todo:
-ok: for the subtitles the file needs to be ported over from the other directory. I think the strategy would be to send the SRT file into an LLM instead of having it go to AWS translate.
+
+make sure that the s3 buckets contents are getting removed after 1 or 2 days since the videos are stored on instagram
+
+fix the upload URLs for downloading files locally since the URLs aer now subtitled_{video name which isn't perfect}
+
+I think a better way to do translations would be to send the SRT file into an LLM instead of having it go to AWS translate.
 
 step 4 should be different depending on what the user selected in the first step. if they chose schedule, it should have options to schedule the post. if they chose dub or sub, it should have options to do those as well.
 

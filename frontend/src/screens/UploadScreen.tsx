@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Platform, Alert, TextInput, Linking, Switch, Animated, LayoutAnimation } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Platform, Alert, TextInput, Linking, Switch, Animated, LayoutAnimation, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { TierBadge } from '../components/TierBadge';
@@ -23,6 +23,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { VideoUpload } from '../components/VideoUpload/VideoUpload';
 import { videoService } from '../services/videoService';
 import { useAuth } from '../contexts/AuthContext';
+import * as FileSystem from 'expo-file-system';
 
 interface VideoSelection {
   name: string;
@@ -114,6 +115,12 @@ interface DubbingProgress {
     status: 'pending' | 'processing' | 'completed' | 'failed';
     progress: number;
   }>;
+}
+
+interface VideoFormData {
+  uri: string;
+  type: string;
+  name: string;
 }
 
 const initialDubbingProgress: DubbingProgress = {
@@ -272,6 +279,9 @@ export const UploadScreen: React.FC = () => {
   });
   const [languageSearch, setLanguageSearch] = useState('');
   const [dubbingProgress, setDubbingProgress] = useState<DubbingProgress>(initialDubbingProgress);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [processingError, setProcessingError] = useState<string | null>(null);
 
   const pickVideo = async () => {
     try {
@@ -1049,8 +1059,12 @@ export const UploadScreen: React.FC = () => {
             title={uploadState.deliveryOption === 'post' ? 'Upload & Post' :
                   uploadState.deliveryOption === 'schedule' ? 'Schedule Post' : 'Download Video'}
             onPress={() => {
-              // Handle upload/schedule/download based on deliveryOption
-              console.log('Processing video with settings:', { uploadState, selectedVideo });
+              if (uploadState.deliveryOption === 'download' && uploadState.translationType === 'subtitles') {
+                processVideoWithSubtitles();
+              } else {
+                // Handle other delivery options
+                console.log('Processing video with settings:', { uploadState, selectedVideo });
+              }
             }}
             variant="primary"
             leftIcon={uploadState.deliveryOption === 'post' ? 'upload' :
@@ -1081,6 +1095,170 @@ export const UploadScreen: React.FC = () => {
 
   const handleError = (error: string) => {
     Alert.alert('Error', error);
+  };
+
+  const renderProcessingModal = () => (
+    <Modal
+      animationType="fade"
+      transparent={true}
+      visible={isProcessing}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.processingModal, { 
+          backgroundColor: colors.surface,
+          borderColor: colors.border
+        }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.processingTitle, { color: colors.text }]}>
+            Processing Video
+          </Text>
+          <Text style={[styles.processingSubtitle, { color: colors.textSecondary }]}>
+            {processingError ? 'Error: ' + processingError : 'Please wait while we process your video...'}
+          </Text>
+          {!processingError && (
+            <View style={styles.progressBar}>
+              <View 
+                style={[
+                  styles.progressFill, 
+                  { 
+                    backgroundColor: colors.primary,
+                    width: `${processingProgress}%` 
+                  }
+                ]} 
+              />
+            </View>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const downloadVideo = async (videoUrl: string, filename: string) => {
+    try {
+      const downloadResumable = FileSystem.createDownloadResumable(
+        videoUrl,
+        FileSystem.documentDirectory + filename,
+        {},
+        (downloadProgress) => {
+          const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
+          setProcessingProgress(90 + (progress * 10)); // Last 10% of the progress bar
+        }
+      );
+
+      const result = await downloadResumable.downloadAsync();
+      if (!result) throw new Error('Download failed');
+      return result.uri;
+    } catch (error) {
+      console.error('Download error:', error);
+      throw error;
+    }
+  };
+
+  const processVideoWithSubtitles = async () => {
+    if (!selectedVideo) return;
+
+    setIsProcessing(true);
+    setProcessingProgress(0);
+    setProcessingError(null);
+
+    try {
+      // Step 1: Get presigned URL
+      setProcessingProgress(10);
+      const uploadUrlResponse = await videoService.getUploadUrl({
+        fileName: selectedVideo.name,
+        fileType: 'video/mp4',
+      });
+
+      // Step 2: Upload to S3
+      setProcessingProgress(20);
+      await videoService.uploadToS3(
+        uploadUrlResponse.uploadUrl,
+        {
+          uri: selectedVideo.uri,
+          type: 'video/mp4',
+          name: selectedVideo.name,
+        },
+        {
+          onProgress: (progress: number) => {
+            // Update progress from 20% to 70% during upload
+            setProcessingProgress(20 + (progress * 50));
+          }
+        }
+      );
+
+      // Get videoId from upload response
+      const videoId = uploadUrlResponse.videoId;
+      setProcessingProgress(70);
+
+      // Start subtitle processing
+      const processResponse = await fetch(`${config.api.baseUrl}/v1/videos/${videoId}/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sourceLanguage: uploadState.sourceLanguage,
+          targetLanguages: uploadState.targetLanguages,
+          translationType: 'subtitles',
+          caption: uploadState.caption,
+        }),
+      });
+
+      if (!processResponse.ok) {
+        throw new Error('Failed to process video');
+      }
+
+      setProcessingProgress(80);
+
+      // Poll for status until complete
+      let status = 'processing';
+      while (status === 'processing') {
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Poll every 2 seconds
+
+        const statusResponse = await fetch(`${config.api.baseUrl}/v1/videos/${videoId}/status`);
+        const statusData = await statusResponse.json();
+        
+        if (statusData.status === 'completed') {
+          status = 'completed';
+          setProcessingProgress(90); // Save last 10% for download progress
+        } else if (statusData.status === 'failed') {
+          throw new Error(statusData.error || 'Processing failed');
+        } else {
+          setProcessingProgress(70 + (statusData.progress || 0) * 0.2); // Use 20% for processing
+        }
+      }
+
+      // Download the processed video
+      const downloadUrl = `${config.api.baseUrl}/v1/videos/${videoId}/download`;
+      const filename = `subtitled_${selectedVideo.name}`;
+      const localUri = await downloadVideo(downloadUrl, filename);
+
+      Alert.alert(
+        'Download Complete',
+        `Video saved to: ${localUri}`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setIsProcessing(false);
+              setProcessingProgress(0);
+            }
+          }
+        ]
+      );
+
+    } catch (error: any) {
+      console.error('Processing error:', error);
+      setProcessingError(error.message || 'Failed to process video');
+    } finally {
+      if (processingError) {
+        setTimeout(() => {
+          setIsProcessing(false);
+          setProcessingProgress(0);
+          setProcessingError(null);
+        }, 2000);
+      }
+    }
   };
 
   return (
@@ -1135,6 +1313,7 @@ export const UploadScreen: React.FC = () => {
             </View>
           </FlingGestureHandler>
         </GestureHandlerRootView>
+        {renderProcessingModal()}
       </SafeAreaView>
     </ErrorBoundary>
   );
@@ -1417,7 +1596,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   progressBar: {
+    width: '100%',
     height: 4,
+    backgroundColor: '#E5E7EB',
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -1455,5 +1636,29 @@ const styles = StyleSheet.create({
   translationPricing: {
     fontSize: 13,
     fontWeight: '500',
+  },
+  processingModal: {
+    padding: 24,
+    borderRadius: 16,
+    width: '80%',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  processingTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  processingSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
 }); 

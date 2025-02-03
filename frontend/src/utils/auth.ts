@@ -1,19 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchAuthSession } from 'aws-amplify/auth';
 
 const AUTH_TOKEN_KEY = '@auth_token';
 
-export async function getAuthToken(): Promise<string | null> {
+export const getAuthToken = async () => {
   try {
-    const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
-    if (!token) {
+    const { tokens } = await fetchAuthSession({ forceRefresh: false });
+    if (!tokens?.idToken) {
       throw new Error('No authentication token found');
     }
-    return token;
+    return tokens.idToken.toString();
   } catch (error) {
-    console.error('Error getting auth token:', error);
+    console.error('Auth token error:', error);
     throw error;
   }
-}
+};
 
 export async function setAuthToken(token: string): Promise<void> {
   try {

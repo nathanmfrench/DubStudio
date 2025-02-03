@@ -13,15 +13,23 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({ onUploadComplete, onEr
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const handleVideoSelect = async () => {
+    console.log('[VideoUpload] Starting video selection');
     try {
-      // Pick video file
       const result = await DocumentPicker.getDocumentAsync({
         type: 'video/*',
         copyToCacheDirectory: true,
       });
 
+      console.log('[VideoUpload] Document picker result:', result);
+
       if (!result.canceled) {
         const file = result.assets[0];
+        console.log('[VideoUpload] Selected file:', {
+          name: file.name,
+          type: file.mimeType,
+          size: file.size,
+          uri: file.uri.substring(0, 20) + '...'
+        });
         setIsUploading(true);
         setUploadProgress(0);
 
@@ -45,7 +53,7 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({ onUploadComplete, onEr
         onUploadComplete(uploadUrlResponse.videoId);
       }
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('[VideoUpload] Upload error:', error);
       onError(error instanceof Error ? error.message : 'Failed to upload video');
     } finally {
       setIsUploading(false);

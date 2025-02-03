@@ -1,6 +1,8 @@
 import { fetchAuthSession, getCurrentUser } from 'aws-amplify/auth';
 import { config } from './env';
 import Constants from 'expo-constants';
+import { Amplify } from 'aws-amplify';
+
 
 console.log('Expo Config:', Constants.expoConfig?.extra);
 console.log('AWS Config being used:', {
@@ -35,6 +37,14 @@ export const amplifyConfig = {
       userPoolClientId: config.aws.userPoolClientId,
       region: config.aws.region,
       authorizationType: 'AMAZON_COGNITO_USER_POOLS'
+    },
+    region: config.aws.region,
+    userPoolWebClientId: config.aws.userPoolClientId,
+    oauth: {
+      scope: ['email', 'openid'],
+      redirectSignIn: 'exp://localhost:19000/--/*', //these will have to be changed to the actual callback urls
+      redirectSignOut: 'exp://localhost:19000/--/*', //these will have to be changed to the actual logout urls
+      responseType: 'code'
     }
   },
   API: {
@@ -42,13 +52,13 @@ export const amplifyConfig = {
       dubstudio: {
         endpoint: config.api.baseUrl,
         region: config.aws.region,
-        authorization: {
-          type: 'AMAZON_COGNITO_USER_POOLS'
-        }
+        authorizationType: 'AMAZON_COGNITO_USER_POOLS'
       }
     }
   }
 };
+
+console.log('Amplify API Config:', amplifyConfig.API.REST);
 
 // Export the check function to be called after configuration
 export async function checkAuthState() {
@@ -81,10 +91,12 @@ export const apiEndpoints = {
   },
 };
 
-console.log('API Endpoints configured:', {
-  baseUrl: config.api.baseUrl,
-  endpoints: apiEndpoints,
-  region: config.aws.region,
-  userPoolId: config.aws.userPoolId,
-  userPoolClientId: config.aws.userPoolClientId
-}); 
+console.log('Initializing Amplify with config:', {
+  userPoolId: config.aws.userPoolId?.substring(0, 6) + '...',
+  userPoolClientId: config.aws.userPoolClientId?.substring(0, 6) + '...',
+  region: config.aws.region
+});
+
+Amplify.configure(amplifyConfig);
+
+export { fetchAuthSession, getCurrentUser } from 'aws-amplify/auth'; 

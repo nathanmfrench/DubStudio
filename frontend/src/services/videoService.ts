@@ -1,6 +1,7 @@
-import axios from 'axios';
+import { post, get } from 'aws-amplify/api';
 import { API_URL } from '..//config/constants';
 import { getAuthToken } from '..//utils/auth';
+import { amplifyConfig } from '..//config/aws-config';
 
 export interface UploadVideoRequest {
   fileName: string;
@@ -25,33 +26,87 @@ export interface VideoStatus {
   };
 }
 
+interface UploadOptions {
+  onProgress?: (percentage: number) => void;
+}
+
 class VideoService {
-  private async getHeaders() {
-    const token = await getAuthToken();
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
-  }
 
   async getUploadUrl(request: UploadVideoRequest): Promise<UploadVideoResponse> {
-    const headers = await this.getHeaders();
-    const response = await axios.post(`${API_URL}/v1/videos`, request, { headers });
-    return response.data;
+    try {
+      const restOperation = post({
+        apiName: 'dubstudio',
+        path: '/v1/videos',
+        options: {
+          body: {
+            fileName: request.fileName,
+            fileType: request.fileType
+          }
+        }
+      });
+
+      const { body } = await restOperation.response;
+      const response = await body.json();
+      return response as unknown as UploadVideoResponse;
+    } catch (error) {
+      console.error('Upload URL request failed:', error);
+      throw error;
+    }
   }
 
-  async uploadToS3(uploadUrl: string, file: File): Promise<void> {
-    await axios.put(uploadUrl, file, {
-      headers: {
-        'Content-Type': file.type,
-      },
+  async uploadToS3(
+    presignedUrl: string,
+    file: { uri: string; type: string; name: string },
+    options?: UploadOptions
+  ) {
+    console.log('[VideoService] Starting S3 upload:', {
+      presignedUrl: presignedUrl.substring(0, 50) + '...',
+      file: {
+        name: file.name,
+        type: file.type,
+      }
+    });
+
+    const xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = (event) => {
+      console.log(`[VideoService] Upload progress: ${Math.round((event.loaded / event.total) * 100)}%`);
+      if (event.lengthComputable && options?.onProgress) {
+        const percent = (event.loaded / event.total) * 100;
+        options.onProgress(Math.round(percent));
+      }
+    };
+    
+    await new Promise((resolve, reject) => {
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState === 4) {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(xhr.response);
+          } else {
+            reject(new Error('Upload failed'));
+          }
+        }
+      };
+      
+      xhr.open('PUT', presignedUrl);
+      xhr.setRequestHeader('Content-Type', file.type);
+      xhr.send({ uri: file.uri, type: file.type, name: file.name });
     });
   }
 
   async getVideoStatus(videoId: string): Promise<VideoStatus> {
-    const headers = await this.getHeaders();
-    const response = await axios.get(`${API_URL}/v1/videos/${videoId}/status`, { headers });
-    return response.data;
+    try {
+      const restOperation = get({
+        apiName: 'dubstudio',
+        path: `/v1/videos/${videoId}/status`
+      });
+
+      const { body } = await restOperation.response;
+      const response = await body.json();
+      return response as unknown as VideoStatus;
+    } catch (error) {
+      console.error('Failed to get video status:', error);
+      throw error;
+    }
   }
 }
 

@@ -11,6 +11,7 @@ import * as path from 'path';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Duration } from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import { FlatListComponent } from 'react-native';
 
 export class InfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -34,12 +35,6 @@ export class InfrastructureStack extends cdk.Stack {
         {
           expiration: Duration.days(30),
           prefix: 'raw/',
-          transitions: [
-            {
-              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-              transitionAfter: Duration.days(30)
-            }
-          ]
         }
       ],
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -50,22 +45,19 @@ export class InfrastructureStack extends cdk.Stack {
     const rawBucket = new s3.Bucket(this, 'RawVideosBucket', {
       bucketName: `dubstudio-raw-videos-${accountId}-${env}`,
       lifecycleRules: [
-        // SIMPLE EXPIRATION ONLY
         {
-          expiration: Duration.days(1),
-          prefix: 'uploads/',
-          noncurrentVersionExpiration: Duration.days(0), // Disable versioning
+          expiration: Duration.days(30),
+          prefix: 'raw/',
           abortIncompleteMultipartUploadAfter: Duration.days(1),
-          enabled: true
         }
       ],
-      versioned: false // Critical - versioning can cause hidden transitions
+      versioned: false
     });
 
     const processedBucket = new s3.Bucket(this, 'ProcessedVideosBucket', {
       bucketName: `dubstudio-processed-videos-${accountId}-${env}`,
       lifecycleRules: [{
-        expiration: Duration.days(1),
+        expiration: Duration.days(30),
         prefix: 'videos/'
       }]
     });
@@ -81,18 +73,16 @@ export class InfrastructureStack extends cdk.Stack {
 
     // Create Cognito User Pool
     const userPool = new cognito.UserPool(this, 'DubStudioUserPool', {
-      userPoolName: 'dubstudio-users',
-      selfSignUpEnabled: true,
+      userPoolName: 'DubStudioUsers',
       signInAliases: {
-        email: true,
-        username: true,
+        username: false,  // Disable username
+        email: true       // Use email as primary identifier
       },
+      autoVerify: { email: false },
       standardAttributes: {
-        email: {
-          required: true,
-          mutable: true,
-        },
+        email: { required: true, mutable: false }
       },
+      selfSignUpEnabled: true,
       customAttributes: {
         tier: new cognito.StringAttribute({ mutable: true }), // For user subscription tier
         credits: new cognito.NumberAttribute({ mutable: true }), // For usage tracking
@@ -105,35 +95,28 @@ export class InfrastructureStack extends cdk.Stack {
         requireSymbols: true,
       },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development only
+      removalPolicy: cdk.RemovalPolicy.RETAIN, // For development only
     });
 
     // Create Cognito User Pool Client
-    const userPoolClient = userPool.addClient('DubStudioUserPoolClient', {
-      authFlows: {
-        userPassword: true,
-        userSrp: true,
-        adminUserPassword: true,
-      },
+    const userPoolClient = new cognito.UserPoolClient(this, 'DubStudioClient', {
+      userPool,
+      authFlows: { userPassword: true },
       oAuth: {
-        flows: {
-          authorizationCodeGrant: true,
-          implicitCodeGrant: true,
-        },
-        scopes: [cognito.OAuthScope.EMAIL, cognito.OAuthScope.OPENID, cognito.OAuthScope.PROFILE],
-        callbackUrls: ['exp://localhost:19000/--/*'], // Update with your Expo callback URLs
+        flows: { authorizationCodeGrant: true },
+        scopes: [cognito.OAuthScope.EMAIL, cognito.OAuthScope.OPENID],
       },
-      preventUserExistenceErrors: true,
-      accessTokenValidity: cdk.Duration.minutes(60),
-      idTokenValidity: cdk.Duration.minutes(60),
-      refreshTokenValidity: cdk.Duration.days(30),
+      supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
     });
-
+    const exampleLambdaLogGroup = new logs.LogGroup(this, 'ExampleLambdaLogGroup', {
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY // Optional: auto-delete logs on stack deletion
+    });
     // Common Lambda configuration
     const commonLambdaConfig = {
       runtime: lambda.Runtime.NODEJS_18_X,
       architecture: lambda.Architecture.ARM_64,
-      logRetention: logs.RetentionDays.ONE_WEEK,
+      logGroup: exampleLambdaLogGroup,
       environment: {
         NODE_ENV: 'production',
         BUCKET_NAME: bucket.bucketName,
@@ -251,6 +234,12 @@ export class InfrastructureStack extends cdk.Stack {
       resources: [processedBucket.arnForObjects('videos/*')]
     }));
 
+    videoUploadHandler.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['cognito-idp:GetUser'],
+      resources: [userPool.userPoolArn]
+    }));
+
     // Create API Gateway with CORS
     const api = new apigateway.RestApi(this, 'DubStudioApi', {
       restApiName: 'DubStudio API',
@@ -287,7 +276,7 @@ export class InfrastructureStack extends cdk.Stack {
     const defaultMethodOptions: apigateway.MethodOptions = {
       authorizer: apiAuthorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
-      authorizationScopes: ['aws.cognito.signin.user.admin'],
+      authorizationScopes: ['email', 'openid'],
       methodResponses: [{
         statusCode: '200',
         responseParameters: {
@@ -323,6 +312,16 @@ export class InfrastructureStack extends cdk.Stack {
       new apigateway.LambdaIntegration(videoProcessHandler),
       defaultMethodOptions
     );
+
+    // After creating the authorizer
+    console.log('Cognito Authorizer ID:', apiAuthorizer.authorizerId);
+
+    // When adding methods
+    console.log(`Configuring POST /v1/videos with auth:`, {
+      authType: 'COGNITO', 
+      authorizerId: apiAuthorizer.authorizerId,
+      userPoolArn: userPool.userPoolArn
+    });
 
     // Output important values
     new cdk.CfnOutput(this, 'DubStudioUserPoolId', {
