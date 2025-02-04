@@ -2,7 +2,8 @@ import { fetchAuthSession, getCurrentUser } from 'aws-amplify/auth';
 import { config } from './env';
 import Constants from 'expo-constants';
 import { Amplify } from 'aws-amplify';
-
+import { cognitoUserPoolsTokenProvider } from 'aws-amplify/auth/cognito';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 console.log('Expo Config:', Constants.expoConfig?.extra);
 console.log('AWS Config being used:', {
@@ -33,26 +34,35 @@ if (!config.aws.userPoolId || !config.aws.userPoolClientId || !config.aws.region
 export const amplifyConfig = {
   Auth: {
     Cognito: {
-      userPoolId: config.aws.userPoolId,
-      userPoolClientId: config.aws.userPoolClientId,
-      region: config.aws.region,
-      authorizationType: 'AMAZON_COGNITO_USER_POOLS'
-    },
-    region: config.aws.region,
-    userPoolWebClientId: config.aws.userPoolClientId,
-    oauth: {
-      scope: ['email', 'openid', 'dubstudio/upload_video'],
-      redirectSignIn: 'exp://localhost:19000/--/*', //these will have to be changed to the actual callback urls
-      redirectSignOut: 'exp://localhost:19000/--/*', //these will have to be changed to the actual logout urls
-      responseType: 'code'
+      userPoolId: process.env.EXPO_PUBLIC_AWS_USER_POOL_ID!,
+      userPoolClientId: process.env.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID!,
+      signInWithUsername: false,
+      signInWithEmail: true,
+      loginWith: {
+        oauth: {
+          domain: `${process.env.EXPO_PUBLIC_AWS_USER_POOL_ID!.split('_')[0]}.auth.${process.env.EXPO_PUBLIC_AWS_REGION!}.amazoncognito.com`,
+          scopes: [
+            'openid',
+            'email', 
+            'profile',
+            'videos-resource-server/videos:upload',
+            'videos-resource-server/videos:process'
+          ],
+          scopestoAdd:['videos-resource-server/videos:upload','videos-resource-server/videos:process'],
+          redirectSignIn: ['exp://localhost:19000/--/*', 'dubstudio://*'],
+          redirectSignOut: ['exp://localhost:19000/--/*', 'dubstudio://*'],
+          responseType: 'token' as const
+        },
+        username: true,
+        email: true
+      }
     }
   },
   API: {
     REST: {
       dubstudio: {
-        endpoint: config.api.baseUrl,
-        region: config.aws.region,
-        authorizationType: 'AMAZON_COGNITO_USER_POOLS'
+        endpoint: process.env.EXPO_PUBLIC_API_URL!,
+        region: process.env.EXPO_PUBLIC_AWS_REGION!
       }
     }
   }
@@ -96,6 +106,9 @@ console.log('Initializing Amplify with config:', {
   userPoolClientId: config.aws.userPoolClientId?.substring(0, 6) + '...',
   region: config.aws.region
 });
+
+// Configure token storage
+cognitoUserPoolsTokenProvider.setKeyValueStorage(AsyncStorage);
 
 Amplify.configure(amplifyConfig);
 

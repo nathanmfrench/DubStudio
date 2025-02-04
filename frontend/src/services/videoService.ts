@@ -51,10 +51,18 @@ class VideoService {
         console.log('[VideoService] Token details:', {
           exp: new Date(tokenPayload.exp * 1000),
           isExpired: Date.now() >= tokenPayload.exp * 1000,
-          scopes: tokenPayload.scope,
+          scope: tokenPayload.scope,
           iss: tokenPayload.iss,
-          sub: tokenPayload.sub
+          sub: tokenPayload.sub,
+          client_id: tokenPayload.client_id,
+          token_use: tokenPayload.token_use
         });
+
+        // Verify required scope is present
+        const scopes = tokenPayload.scope?.split(' ') || [];
+        if (!scopes.includes('videos-resource-server/videos:upload')) {
+          throw new Error('Missing required scope: videos-resource-server/videos:upload');
+        }
       } catch (e) {
         console.warn('[VideoService] Could not decode token:', e);
       }
@@ -64,8 +72,7 @@ class VideoService {
         path: '/v1/videos',
         fileName: request.fileName,
         fileType: request.fileType,
-        tokenPresent: !!token,
-        tokenPrefix: token.substring(0, 20) + '...'
+        tokenPresent: !!token
       });
   
       const restOperation = post({

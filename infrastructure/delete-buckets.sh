@@ -1,28 +1,27 @@
 #!/bin/bash
-
-buckets=(
-  "dubstudio-raw-videos-484907500026-dev"
-  "dubstudio-videos-dev" 
-  "dubstudio-processed-videos-484907500026-dev"
+BUCKETS=(
+"dubstudio-processed-videos-484907500026-dev"
+"dubstudio-raw-videos-484907500026-dev"
 )
 
-for bucket in "${buckets[@]}"; do
-  echo "Deleting $bucket..."
-  
-  # Get all versions and delete markers
-  objects=$(aws s3api list-object-versions \
-    --bucket $bucket \
-    --query '{Objects: (Versions[].{Key:Key,VersionId:VersionId}) || []}' \
-    --output json)
+echo "The following buckets will be deleted:"
+printf '%s\n' "${BUCKETS[@]}"
+read -p "Are you sure? (y/n) " -n 1 -r
+echo
 
-  # Delete all versions first
-  if [ "$(echo $objects | jq '.Objects | length')" -gt 0 ]; then
-    aws s3api delete-objects \
-      --bucket $bucket \
-      --delete "$objects" \
-      --no-cli-pager
-  fi
-
-  # Delete the bucket
-  aws s3api delete-bucket --bucket $bucket
-done
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+  for BUCKET in "${BUCKETS[@]}"; do
+    echo "Processing $BUCKET..."
+    
+    # Empty bucket
+    aws s3 rm s3://$BUCKET --recursive
+    
+    # Delete bucket
+    aws s3api delete-bucket --bucket $BUCKET
+    
+    echo "$BUCKET deleted"
+  done
+  echo "All buckets deleted"
+else
+  echo "Operation cancelled"
+fi

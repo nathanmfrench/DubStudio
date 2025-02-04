@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { signIn, signUp, signOut, getCurrentUser, confirmSignUp, resetPassword, confirmResetPassword, resendSignUpCode } from 'aws-amplify/auth';
+import { signIn, signUp, signOut, getCurrentUser, confirmSignUp, resetPassword, confirmResetPassword, resendSignUpCode, fetchAuthSession } from 'aws-amplify/auth';
 import type { SignUpInput } from 'aws-amplify/auth';
 
 interface AuthContextType {
@@ -47,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       console.log('AuthContext: Starting sign in...');
+      
       const signInResult = await signIn({
         username: email,
         password,
@@ -54,17 +55,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           authFlowType: 'USER_PASSWORD_AUTH'
         }
       });
+      
       console.log('AuthContext: Sign in result:', signInResult);
       
-      // After successful sign in, get the current user
-      const user = await getCurrentUser();
-      console.log('AuthContext: Got user:', user);
-      setUser(user);
-      setIsAuthenticated(true);
-      return user;
-    } catch (error: any) {
+      if (signInResult.isSignedIn) {
+        // Fetch session without trying to pass scopes
+        const session = await fetchAuthSession();
+        
+        // Log the complete access token details
+        if (session.tokens?.accessToken) {
+          console.log('AuthContext: Access Token Details:', {
+            jwtToken: session.tokens.accessToken.toString(),
+            payload: session.tokens.accessToken.payload,
+            scopes: session.tokens.accessToken.payload.scope?.split(' ') || []
+          });
+        }
+
+        // Get and set the current user
+        const currentUser = await getCurrentUser();
+        setUser(currentUser);
+        setIsAuthenticated(true);
+        console.log('AuthContext: Successfully signed in and set user state');
+        
+        return signInResult;
+      } else {
+        throw new Error('Sign in failed - user not signed in after completion');
+      }
+    } catch (error) {
       console.error('AuthContext: Sign in error:', error);
-      setError(error.message || 'An error occurred during sign in');
+      setUser(null);
+      setIsAuthenticated(false);
+      setError(error instanceof Error ? error.message : 'An error occurred during sign in');
       throw error;
     } finally {
       setLoading(false);
