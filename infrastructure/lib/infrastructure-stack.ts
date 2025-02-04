@@ -239,13 +239,6 @@ export class InfrastructureStack extends cdk.Stack {
     };
 
     // Create Lambda functions
-    const preTokenGenerationHandler = new lambda.Function(this, 'PreTokenGenerationHandler', {
-      ...commonLambdaConfig,
-      handler: 'videos/preTokenGeneration.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/dist')),
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 256,
-    });
     const videoUploadHandler = new lambda.Function(this, 'DubStudioVideoUploadHandler', {
       ...commonLambdaConfig,
       handler: 'videos/upload.handler',
@@ -257,7 +250,7 @@ export class InfrastructureStack extends cdk.Stack {
         VIDEOS_TABLE_NAME: videosTable.tableName,
       },
     });
-    userPool.addTrigger(cognito.UserPoolOperation.PRE_TOKEN_GENERATION, preTokenGenerationHandler);
+    
     const videoStatusHandler = new lambda.Function(this, 'DubStudioVideoStatusHandler', {
       ...commonLambdaConfig,
       handler: 'videos/status.handler',
