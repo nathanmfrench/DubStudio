@@ -1,6 +1,7 @@
 todo:
 
-possibly make specific scopes for each of the different lambda functions (technically safer)
+Delete everything with the scope bullshit. We don't need all the extra scopes on the access tokens, just use the normal JWT token to get a presigned URL.
+
 login works, but need to fix the confirmation email not getting sent (this stuff is all in authcontext.tsx)
 
 make sure that the s3 buckets contents are getting removed after 1 or 2 days since the videos are stored on instagram
