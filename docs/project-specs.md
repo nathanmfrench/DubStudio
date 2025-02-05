@@ -1,5 +1,10 @@
 todo:
 
+Make sure user pool client is the right user pool client. it has just changed so lets fix it . we dont need to redeploy anything.
+
+sanitize inputs to the s3 bucket, generally sanitize inputs overall for everything lol. make sure file types etc are enforced.
+
+there's a layer for dubbing and a layer called dubbinglayer. which one is used?
 Delete everything with the scope bullshit. We don't need all the extra scopes on the access tokens, just use the normal JWT token to get a presigned URL.
 
 login works, but need to fix the confirmation email not getting sent (this stuff is all in authcontext.tsx)

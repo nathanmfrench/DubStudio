@@ -23,7 +23,7 @@
     "@types/dotenv": "^8.2.3",
     "aws-amplify": "^6.0.12",
     "dotenv": "^16.4.7",
-    "expo": "~52.0.26",
+    "expo": "~52.0.30",
     "expo-asset": "~11.0.3",
     "expo-blur": "~14.0.3",
     "expo-constants": "~17.0.4",

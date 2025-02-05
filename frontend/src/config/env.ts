@@ -24,12 +24,6 @@ export interface Config {
   };
 }
 
-// Debug Expo config
-console.log('Raw Expo config:', {
-  extra: Constants.expoConfig?.extra,
-  manifest: Constants.manifest
-});
-
 // Get the current environment
 const getEnvironment = (): Environment => {
   const env = Constants.expoConfig?.extra?.EXPO_PUBLIC_ENVIRONMENT as Environment;

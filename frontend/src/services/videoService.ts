@@ -1,7 +1,7 @@
 import { post, get } from 'aws-amplify/api';
-import { API_URL } from '..//config/constants';
-import { getAuthToken } from '..//utils/auth';
-import { amplifyConfig } from '..//config/aws-config';
+import { API_URL } from '../config/constants';
+import { getAuthToken } from '../utils/auth';
+import { amplifyConfig } from '../config/aws-config';
 
 export interface UploadVideoRequest {
   fileName: string;
@@ -30,6 +30,12 @@ interface UploadOptions {
   onProgress?: (percentage: number) => void;
 }
 
+interface VideoFile {
+  uri: string;
+  type: string;
+  name: string;
+}
+
 class VideoService {
 
   async getUploadUrl(request: UploadVideoRequest): Promise<UploadVideoResponse> {
@@ -44,27 +50,26 @@ class VideoService {
         throw new Error('Failed to obtain auth token');
       }
   
-      // Decode and log token info
+      // Log token info for debugging
       try {
         const tokenParts = token.split('.');
         const tokenPayload = JSON.parse(atob(tokenParts[1]));
         console.log('[VideoService] Token details:', {
           exp: new Date(tokenPayload.exp * 1000),
           isExpired: Date.now() >= tokenPayload.exp * 1000,
-          scope: tokenPayload.scope,
           iss: tokenPayload.iss,
           sub: tokenPayload.sub,
           client_id: tokenPayload.client_id,
-          token_use: tokenPayload.token_use
+          token_use: tokenPayload.token_use,
+          scopes: tokenPayload.scope?.split(' ') || []
         });
 
-        // Verify required scope is present
-        const scopes = tokenPayload.scope?.split(' ') || [];
-        if (!scopes.includes('videos-resource-server/videos:upload')) {
-          throw new Error('Missing required scope: videos-resource-server/videos:upload');
+        // Validate token expiration
+        if (Date.now() >= tokenPayload.exp * 1000) {
+          throw new Error('Token has expired');
         }
       } catch (e) {
-        console.warn('[VideoService] Could not decode token:', e);
+        console.warn('[VideoService] Could not decode token for logging:', e);
       }
   
       console.log('[VideoService] Preparing request:', {
@@ -82,10 +87,6 @@ class VideoService {
           body: {
             fileName: request.fileName,
             fileType: request.fileType
-          },
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
           }
         }
       });
@@ -98,11 +99,15 @@ class VideoService {
       try {
         const parsedResponse = await body.json();
         console.log('[VideoService] Response parsed successfully:', {
-          responseKeys: parsedResponse ? Object.keys(parsedResponse) : ["No responsekeys in parsedresponse (getuploadurl function)"],
+          responseKeys: parsedResponse ? Object.keys(parsedResponse) : null,
           responseData: parsedResponse
         });
   
-        return parsedResponse as unknown as UploadVideoResponse;
+        // Type guard for UploadVideoResponse
+        if (this.isUploadVideoResponse(parsedResponse)) {
+          return parsedResponse;
+        }
+        throw new Error('Invalid response format from server');
       } catch (parseError) {
         console.error('[VideoService] Failed to parse response:', parseError);
         const rawText = await body.text();
@@ -129,9 +134,9 @@ class VideoService {
 
   async uploadToS3(
     presignedUrl: string,
-    file: { uri: string; type: string; name: string },
+    file: VideoFile,
     options?: UploadOptions
-  ) {
+  ): Promise<void> {
     console.log('[VideoService] Starting S3 upload:', {
       presignedUrl: presignedUrl.substring(0, 50) + '...',
       file: {
@@ -140,30 +145,76 @@ class VideoService {
       }
     });
 
-    const xhr = new XMLHttpRequest();
-    xhr.upload.onprogress = (event) => {
-      console.log(`[VideoService] Upload progress: ${Math.round((event.loaded / event.total) * 100)}%`);
-      if (event.lengthComputable && options?.onProgress) {
-        const percent = (event.loaded / event.total) * 100;
-        options.onProgress(Math.round(percent));
-      }
-    };
-    
-    await new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      // Set up progress tracking
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && options?.onProgress) {
+          const percentage = (event.loaded / event.total) * 100;
+          options.onProgress(percentage);
+          console.log(`[VideoService] Upload progress: ${Math.round(percentage)}%`);
+        }
+      };
+
       xhr.onreadystatechange = () => {
         if (xhr.readyState === 4) {
           if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(xhr.response);
+            console.log('[VideoService] Upload completed successfully');
+            resolve();
           } else {
-            reject(new Error('Upload failed'));
+            console.error('[VideoService] Upload failed:', {
+              status: xhr.status,
+              response: xhr.responseText
+            });
+            reject(new Error(`Upload failed with status ${xhr.status}`));
           }
         }
       };
-      
-      xhr.open('PUT', presignedUrl);
-      xhr.setRequestHeader('Content-Type', file.type);
-      xhr.send({ uri: file.uri, type: file.type, name: file.name });
+
+      xhr.onerror = () => {
+        console.error('[VideoService] Upload failed with network error');
+        reject(new Error('Network error during upload'));
+      };
+
+      try {
+        xhr.open('PUT', presignedUrl);
+        xhr.setRequestHeader('Content-Type', file.type);
+        
+        // Create FormData and append file
+        const formData = new FormData();
+        formData.append('file', {
+          uri: file.uri,
+          type: file.type,
+          name: file.name
+        } as any);
+
+        xhr.send(formData);
+      } catch (error) {
+        console.error('[VideoService] Error initiating upload:', error);
+        reject(error);
+      }
     });
+  }
+
+  private isUploadVideoResponse(response: any): response is UploadVideoResponse {
+    return (
+      typeof response === 'object' &&
+      response !== null &&
+      typeof response.uploadUrl === 'string' &&
+      typeof response.videoId === 'string' &&
+      typeof response.key === 'string'
+    );
+  }
+
+  private isVideoStatus(response: any): response is VideoStatus {
+    return (
+      typeof response === 'object' &&
+      response !== null &&
+      typeof response.videoId === 'string' &&
+      typeof response.status === 'string' &&
+      ['pending_upload', 'uploaded', 'processing', 'completed', 'failed'].includes(response.status)
+    );
   }
 
   async getVideoStatus(videoId: string): Promise<VideoStatus> {
@@ -175,9 +226,13 @@ class VideoService {
 
       const { body } = await restOperation.response;
       const response = await body.json();
-      return response as unknown as VideoStatus;
+      
+      if (this.isVideoStatus(response)) {
+        return response;
+      }
+      throw new Error('Invalid video status response format');
     } catch (error) {
-      console.error('Failed to get video status:', error);
+      console.error('[VideoService] Failed to get video status:', error);
       throw error;
     }
   }

@@ -40,21 +40,16 @@ export const amplifyConfig = {
       signInWithEmail: true,
       loginWith: {
         oauth: {
-          domain: `${process.env.EXPO_PUBLIC_AWS_USER_POOL_ID!.split('_')[0]}.auth.${process.env.EXPO_PUBLIC_AWS_REGION!}.amazoncognito.com`,
-          scopes: [
-            'openid',
-            'email', 
-            'profile',
-            'videos-resource-server/videos:upload',
-            'videos-resource-server/videos:process'
-          ],
-          scopestoAdd:['videos-resource-server/videos:upload','videos-resource-server/videos:process'],
+          domain: `dubstudio-auth.auth.${process.env.EXPO_PUBLIC_AWS_REGION!}.amazoncognito.com`,
+          scopes: ['openid', 'email', 'profile'],
           redirectSignIn: ['exp://localhost:19000/--/*', 'dubstudio://*'],
           redirectSignOut: ['exp://localhost:19000/--/*', 'dubstudio://*'],
           responseType: 'token' as const
         },
-        username: true,
-        email: true
+        username: false,
+        email: true,
+        phone: false,
+        preferredAuth: ['srp']
       }
     }
   },
@@ -67,7 +62,6 @@ export const amplifyConfig = {
     }
   }
 };
-
 console.log('Amplify API Config:', amplifyConfig.API.REST);
 
 // Export the check function to be called after configuration

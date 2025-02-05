@@ -4,6 +4,7 @@ import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
 import { AuthenticatedEvent, success, error, getUserId } from '../types/api';
+import * as path from 'path';
 
 const s3Client = new S3Client({});
 const ddbClient = new DynamoDBClient({});
@@ -18,6 +19,14 @@ interface UploadRequestBody {
   fileType: string;
 }
 
+// Sanitize filename to prevent path traversal
+function sanitizeFileName(fileName: string): string {
+  // Get the base name and remove any path components
+  const baseName = path.basename(fileName);
+  // Remove any non-alphanumeric characters except for dots, dashes, and underscores
+  return baseName.replace(/[^a-zA-Z0-9.-_]/g, '_');
+}
+
 export const handler = async (event: AuthenticatedEvent) => {
   console.log({
     stage: 'START',
@@ -30,13 +39,7 @@ export const handler = async (event: AuthenticatedEvent) => {
       headers: event.headers
     }
   });
-  const authScopes = event.requestContext.authorizer?.claims?.scope || '';
-  if (!authScopes.includes('dubstudio/upload_video')) {
-    return {
-      statusCode: 403,
-      body: JSON.stringify({ message: 'Missing required scope' })
-    };
-  }
+
   try {
     // Validate request method
     if (event.httpMethod !== 'POST') {
@@ -80,18 +83,20 @@ export const handler = async (event: AuthenticatedEvent) => {
     // Get user ID from Cognito claims
     const userId = getUserId(event);
     const videoId = randomUUID();
+    const sanitizedFileName = sanitizeFileName(body.fileName);
 
     console.log({
       stage: 'PROCESSING',
       action: 'generate_ids',
       userId,
       videoId,
+      originalFileName: body.fileName,
+      sanitizedFileName,
       timestamp: new Date().toISOString()
     });
 
-    // Generate a unique key for the video
-    const key = `${userId}/${videoId}/${body.fileName}`; // Allows path traversal via "../../"
-
+    // Generate a unique key for the video with sanitized filename
+    const key = `uploads/${userId}/${videoId}/${sanitizedFileName}`;
 
     console.log({
       stage: 'PROCESSING',
@@ -100,11 +105,16 @@ export const handler = async (event: AuthenticatedEvent) => {
       timestamp: new Date().toISOString()
     });
 
-    // Create presigned URL for upload
+    // Create presigned URL for upload with specific conditions
     const command = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,
-      ContentType: body.fileType
+      ContentType: body.fileType,
+      Metadata: {
+        userId,
+        videoId,
+        originalFileName: body.fileName
+      }
     });
 
     console.log({
@@ -116,14 +126,19 @@ export const handler = async (event: AuthenticatedEvent) => {
       timestamp: new Date().toISOString()
     });
 
-    const presignedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+    const presignedUrl = await getSignedUrl(s3Client, command, { 
+      expiresIn: 3600 // 1 hour
+    });
 
     // Create video record in DynamoDB
     const item = {
       userId,
       videoId,
-      fileName: body.fileName,
+      fileName: sanitizedFileName,
+      originalFileName: body.fileName,
       status: 'pending_upload',
+      s3Key: key,
+      contentType: body.fileType,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };

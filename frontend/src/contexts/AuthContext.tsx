@@ -46,32 +46,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      console.log('AuthContext: Starting sign in...');
+      console.log('AuthContext: Starting sign in with SRP...');
       
       const signInResult = await signIn({
         username: email,
         password,
         options: {
-          authFlowType: 'USER_PASSWORD_AUTH'
+          authFlowType: 'USER_SRP_AUTH'
         }
       });
       
-      console.log('AuthContext: Sign in result:', signInResult);
+      console.log('AuthContext: Sign in result:', {
+        isSignedIn: signInResult.isSignedIn,
+        nextStep: signInResult.nextStep
+      });
       
       if (signInResult.isSignedIn) {
-        // Fetch session without trying to pass scopes
         const session = await fetchAuthSession();
+        console.log('AuthContext: Session fetched:', {
+          hasIdToken: !!session.tokens?.idToken,
+          hasAccessToken: !!session.tokens?.accessToken,
+          accessTokenScopes: session.tokens?.accessToken?.payload.scope?.split(' ') || [],
+          tokenExpiration: session.tokens?.accessToken?.payload.exp ? 
+            new Date(session.tokens.accessToken.payload.exp * 1000).toISOString() : 
+            'No expiration'
+        });
         
-        // Log the complete access token details
-        if (session.tokens?.accessToken) {
-          console.log('AuthContext: Access Token Details:', {
-            jwtToken: session.tokens.accessToken.toString(),
-            payload: session.tokens.accessToken.payload,
-            scopes: session.tokens.accessToken.payload.scope?.split(' ') || []
-          });
+        if (!session.tokens?.accessToken) {
+          throw new Error('No access token received after successful sign in');
         }
-
-        // Get and set the current user
+        
         const currentUser = await getCurrentUser();
         setUser(currentUser);
         setIsAuthenticated(true);

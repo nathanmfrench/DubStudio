@@ -8,6 +8,12 @@ interface VideoUploadProps {
   onError: (error: string) => void;
 }
 
+interface VideoFile {
+  uri: string;
+  type: string;
+  name: string;
+}
+
 export const VideoUpload: React.FC<VideoUploadProps> = ({ onUploadComplete, onError }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -22,38 +28,61 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({ onUploadComplete, onEr
 
       console.log('[VideoUpload] Document picker result:', result);
 
-      if (!result.canceled) {
+      if (!result.canceled && result.assets[0]) {
         const file = result.assets[0];
+        
+        // Validate file
+        if (!file.mimeType?.startsWith('video/')) {
+          throw new Error('Please select a valid video file');
+        }
+
         console.log('[VideoUpload] Selected file:', {
           name: file.name,
           type: file.mimeType,
           size: file.size,
           uri: file.uri.substring(0, 20) + '...'
         });
+
         setIsUploading(true);
         setUploadProgress(0);
 
         // Get pre-signed URL
         const uploadUrlResponse = await videoService.getUploadUrl({
           fileName: file.name,
-          fileType: file.mimeType || 'video/mp4',
+          fileType: file.mimeType,
         });
 
-        // Upload to S3
+        console.log('[VideoUpload] Got upload URL:', {
+          videoId: uploadUrlResponse.videoId,
+          key: uploadUrlResponse.key
+        });
+
+        // Prepare file object
+        const videoFile: VideoFile = {
+          uri: file.uri,
+          type: file.mimeType,
+          name: file.name,
+        };
+
+        // Upload to S3 with progress tracking
         await videoService.uploadToS3(
           uploadUrlResponse.uploadUrl,
+          videoFile,
           {
-            uri: file.uri,
-            type: file.mimeType,
-            name: file.name,
-          } as any
+            onProgress: (progress: number) => {
+              console.log('[VideoUpload] Upload progress:', progress);
+              setUploadProgress(progress);
+            }
+          }
         );
 
+        console.log('[VideoUpload] Upload completed successfully');
         setUploadProgress(100);
         onUploadComplete(uploadUrlResponse.videoId);
       }
     } catch (error) {
       console.error('[VideoUpload] Upload error:', error);
+      setUploadProgress(0);
       onError(error instanceof Error ? error.message : 'Failed to upload video');
     } finally {
       setIsUploading(false);
@@ -74,8 +103,8 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({ onUploadComplete, onEr
       
       {isUploading && (
         <View style={styles.progressContainer}>
-          <ActivityIndicator size="small" color="#0000ff" />
-          <Text style={styles.progressText}>{uploadProgress}%</Text>
+          <ActivityIndicator size="small" color="#007AFF" />
+          <Text style={styles.progressText}>{Math.round(uploadProgress)}%</Text>
         </View>
       )}
     </View>
@@ -93,7 +122,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: '#99c9ff',
   },
   buttonText: {
     color: '#fff',

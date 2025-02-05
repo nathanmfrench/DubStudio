@@ -169,54 +169,45 @@ export class InfrastructureStack extends cdk.Stack {
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
       removalPolicy: cdk.RemovalPolicy.RETAIN
     });
-    
-    // Add this before creating the UserPoolClient
-    const resourceServer = userPool.addResourceServer('DubStudioResourceServer', {
-      identifier: 'dubstudio-api',
-      scopes: [
-        { scopeName: 'video:upload', scopeDescription: 'Video upload access' },
-        { scopeName: 'video:process', scopeDescription: 'Video processing access' }
-      ]
-    });
 
-    // Then update your UserPoolClient
-    const userPoolClient = userPool.addClient('DubStudioClient', {
-      oAuth: {
-        scopes: [
-          cognito.OAuthScope.resourceServer(resourceServer, { scopeName: 'video:upload', scopeDescription: 'Video upload access' }),
-          cognito.OAuthScope.resourceServer(resourceServer, { scopeName: 'video:process', scopeDescription: 'Video processing access' })
-        ]
+    // Add domain to user pool
+    const domain = userPool.addDomain('DubStudioAuthDomain', {
+      cognitoDomain: {
+        domainPrefix: 'dubstudio-auth'
       }
     });
 
-    // Define resource server properties with type safety
-    const resourceServerProps: cognito.CfnUserPoolResourceServerProps = {
-      identifier: 'videos-resource-server',
-      name: 'DubStudio Video Services',
-      userPoolId: userPool.userPoolId,
-      scopes: [
-        {
-          scopeName: 'videos:upload',
-          scopeDescription: 'Permission to upload videos'
+    // Create a simple user pool client without custom scopes
+    const userPoolClient = new cognito.UserPoolClient(this, 'DubStudioUserPoolClient', {
+      userPool,
+      authFlows: {
+        userSrp: true,
+        adminUserPassword: false,
+        userPassword: false,
+        custom: false
+      },
+      oAuth: {
+        flows: {
+          implicitCodeGrant: true,
+          authorizationCodeGrant: true
         },
-        {
-          scopeName: 'videos:process',
-          scopeDescription: 'Permission to process uploaded videos'
-        }
-      ]
-    };
-
-    // Create the resource server using CfnUserPoolResourceServer
-    const videoResourceServer = new cognito.CfnUserPoolResourceServer(
-      this, 
-      'VideoResourceServer',
-      resourceServerProps
-    );
-
-    // Create OAuth scopes for the user pool client
-    const videoUploadScope = cognito.OAuthScope.custom(`videos-resource-server/videos:upload`);
-    const videoProcessScope = cognito.OAuthScope.custom(`videos-resource-server/videos:process`);
-    videoResourceServer.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+        scopes: [
+          cognito.OAuthScope.OPENID,
+          cognito.OAuthScope.EMAIL,
+          cognito.OAuthScope.PROFILE
+        ],
+        callbackUrls: [
+          'exp://localhost:19000/--/*',
+          'dubstudio://*'
+        ],
+        logoutUrls: [
+          'exp://localhost:19000/--/*',
+          'dubstudio://*'
+        ]
+      },
+      preventUserExistenceErrors: true,
+      generateSecret: false
+    });
 
     const exampleLambdaLogGroup = new logs.LogGroup(this, 'ExampleLambdaLogGroup', {
       retention: logs.RetentionDays.ONE_WEEK,
@@ -335,6 +326,63 @@ export class InfrastructureStack extends cdk.Stack {
     bucket.grantReadWrite(subtitleHandler);
     videosTable.grantReadWriteData(subtitleHandler);
 
+    // Add explicit permissions for presigned URL generation
+    videoUploadHandler.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        's3:PutObject',
+        's3:GetObject',
+        's3:PutObjectAcl',
+        's3:GetObjectAcl',
+        's3:ListBucket'
+      ],
+      resources: [
+        bucket.arnForObjects('*'),
+        bucket.bucketArn
+      ]
+    }));
+
+    // Add bucket policy to allow presigned URL uploads
+    const bucketPolicy = new s3.BucketPolicy(this, 'AllowPresignedUrlUploads', {
+      bucket: bucket
+    });
+
+    bucketPolicy.document.addStatements(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      principals: [new iam.ArnPrincipal(videoUploadHandler.role!.roleArn)],
+      actions: [
+        's3:PutObject',
+        's3:GetObject'
+      ],
+      resources: [bucket.arnForObjects('*')]
+    }));
+
+    // Add CORS rule specifically for presigned URLs
+    bucket.addCorsRule({
+      allowedMethods: [
+        s3.HttpMethods.PUT,
+        s3.HttpMethods.POST,
+        s3.HttpMethods.GET
+      ],
+      allowedOrigins: [
+        'http://localhost:19000',
+        'http://localhost:19001',
+        'exp://localhost:19000',
+        'exp://localhost:19001',
+        'dubstudio://*'
+      ],
+      allowedHeaders: ['*'],
+      exposedHeaders: [
+        'ETag',
+        'x-amz-server-side-encryption',
+        'x-amz-request-id',
+        'x-amz-id-2',
+        'Content-Type',
+        'Content-Length'
+      ],
+      maxAge: 3600
+    });
+
     videoProcessHandler.addToRolePolicy(new iam.PolicyStatement({
       actions: ['s3:GetObject', 's3:DeleteObject'],
       resources: [rawBucket.arnForObjects('uploads/*')]
@@ -383,25 +431,11 @@ export class InfrastructureStack extends cdk.Stack {
       resultsCacheTtl: cdk.Duration.minutes(5),
     });
 
-    // Default method options with authorizer
+    // Add explicit authorizer scopes for API Gateway
     const defaultMethodOptions: apigateway.MethodOptions = {
       authorizer: apiAuthorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
-      authorizationScopes: [
-        'openid',
-        'email',
-        'profile',
-        'videos-resource-server/videos:upload',
-        'videos-resource-server/videos:process'
-      ],
-      methodResponses: [{
-        statusCode: '200',
-        responseParameters: {
-          'method.response.header.Access-Control-Allow-Origin': true,
-          'method.response.header.Access-Control-Allow-Headers': true,
-          'method.response.header.Access-Control-Allow-Methods': true,
-        },
-      }],
+      authorizationScopes: ['openid', 'email', 'profile']
     };
 
     // Create API resources and methods
