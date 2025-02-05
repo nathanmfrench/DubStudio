@@ -1,7 +1,8 @@
 #!/bin/bash
 BUCKETS=(
-"dubstudio-processed-videos-484907500026-dev"
-"dubstudio-raw-videos-484907500026-dev"
+"dubstudio-processed-videos-undefined-dev"
+"dubstudio-raw-videos-undefined-dev"
+"dubstudio-videos-undefined-dev"
 )
 
 echo "The following buckets will be deleted:"

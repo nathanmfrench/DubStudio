@@ -1,5 +1,8 @@
 todo:
 
+for downloading files
+https://docs.amplify.aws/gen1/react-native/build-a-backend/storage/download/
+
 Make sure user pool client is the right user pool client. it has just changed so lets fix it . we dont need to redeploy anything.
 
 sanitize inputs to the s3 bucket, generally sanitize inputs overall for everything lol. make sure file types etc are enforced.

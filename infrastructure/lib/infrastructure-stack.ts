@@ -177,14 +177,34 @@ export class InfrastructureStack extends cdk.Stack {
       }
     });
 
-    // Create a simple user pool client without custom scopes
+    // Define custom resource scopes
+    const customResourceServer = userPool.addResourceServer('DubStudioResourceServer', {
+      identifier: 'dubstudio',
+      userPoolResourceServerName: 'DubStudio Resource Server',
+      scopes: [
+        {
+          scopeName: 'videos.upload',
+          scopeDescription: 'Permission to upload videos to DubStudio'
+        },
+        {
+          scopeName: 'videos.process',
+          scopeDescription: 'Permission to process videos in DubStudio'
+        },
+        {
+          scopeName: 'videos.read',
+          scopeDescription: 'Permission to read video status and metadata in DubStudio'
+        }
+      ]
+    });
+
+    // Create Cognito User Pool Client
     const userPoolClient = new cognito.UserPoolClient(this, 'DubStudioUserPoolClient', {
       userPool,
       authFlows: {
         userSrp: true,
-        adminUserPassword: false,
-        userPassword: false,
-        custom: false
+        adminUserPassword: true,
+        custom: true,
+        userPassword: true
       },
       oAuth: {
         flows: {
@@ -194,19 +214,53 @@ export class InfrastructureStack extends cdk.Stack {
         scopes: [
           cognito.OAuthScope.OPENID,
           cognito.OAuthScope.EMAIL,
-          cognito.OAuthScope.PROFILE
+          cognito.OAuthScope.PROFILE,
+          cognito.OAuthScope.COGNITO_ADMIN,
+          cognito.OAuthScope.custom(`${customResourceServer.userPoolResourceServerId}/videos.upload`),
+          cognito.OAuthScope.custom(`${customResourceServer.userPoolResourceServerId}/videos.process`),
+          cognito.OAuthScope.custom(`${customResourceServer.userPoolResourceServerId}/videos.read`)
         ],
         callbackUrls: [
-          'exp://localhost:19000/--/*',
-          'dubstudio://*'
+          'exp://localhost:19000/--/',
+          'exp://localhost:19001/--/',
+          'dubstudio://',
+          'http://localhost:19000/',
+          'http://localhost:19001/',
+          'http://localhost/'
         ],
         logoutUrls: [
-          'exp://localhost:19000/--/*',
-          'dubstudio://*'
+          'exp://localhost:19000/--/',
+          'exp://localhost:19001/--/',
+          'dubstudio://',
+          'http://localhost:19000/',
+          'http://localhost:19001/',
+          'http://localhost/'
         ]
       },
+      accessTokenValidity: cdk.Duration.days(1),
+      refreshTokenValidity: cdk.Duration.days(30),
+      enableTokenRevocation: true,
       preventUserExistenceErrors: true,
-      generateSecret: false
+      generateSecret: false,
+      supportedIdentityProviders: [
+        cognito.UserPoolClientIdentityProvider.COGNITO
+      ],
+      readAttributes: new cognito.ClientAttributes()
+        .withStandardAttributes({
+          email: true,
+          emailVerified: true,
+          phoneNumber: true,
+          phoneNumberVerified: true,
+          preferredUsername: true
+        })
+        .withCustomAttributes('tier', 'credits'),
+      writeAttributes: new cognito.ClientAttributes()
+        .withStandardAttributes({
+          email: true,
+          phoneNumber: true,
+          preferredUsername: true
+        })
+        .withCustomAttributes('tier', 'credits')
     });
 
     const exampleLambdaLogGroup = new logs.LogGroup(this, 'ExampleLambdaLogGroup', {
@@ -431,38 +485,53 @@ export class InfrastructureStack extends cdk.Stack {
       resultsCacheTtl: cdk.Duration.minutes(5),
     });
 
-    // Add explicit authorizer scopes for API Gateway
+    // Update API Gateway authorizer scopes
     const defaultMethodOptions: apigateway.MethodOptions = {
       authorizer: apiAuthorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
-      authorizationScopes: ['openid', 'email', 'profile']
+      authorizationScopes: [
+        'openid',
+        'email',
+        'profile',
+        `${customResourceServer.userPoolResourceServerId}/videos.upload`,
+        `${customResourceServer.userPoolResourceServerId}/videos.process`,
+        `${customResourceServer.userPoolResourceServerId}/videos.read`
+      ]
     };
 
-    // Create API resources and methods
+    // Create API resources and methods with updated scopes
     const apiV1 = api.root.addResource('v1');
     const apiVideos = apiV1.addResource('videos');
     const apiVideoId = apiVideos.addResource('{videoId}');
     const apiVideoStatus = apiVideoId.addResource('status');
     const apiVideoProcess = apiVideoId.addResource('process');
 
-    // Add methods with proper CORS headers
+    // Add methods with proper CORS headers and scopes
     apiVideos.addMethod(
       'POST',
       new apigateway.LambdaIntegration(videoUploadHandler),
-      defaultMethodOptions
-      
+      {
+        ...defaultMethodOptions,
+        authorizationScopes: [`${customResourceServer.userPoolResourceServerId}/videos.upload`]
+      }
     );
 
     apiVideoStatus.addMethod(
       'GET',
       new apigateway.LambdaIntegration(videoStatusHandler),
-      defaultMethodOptions
+      {
+        ...defaultMethodOptions,
+        authorizationScopes: [`${customResourceServer.userPoolResourceServerId}/videos.read`]
+      }
     );
 
     apiVideoProcess.addMethod(
       'POST',
       new apigateway.LambdaIntegration(videoProcessHandler),
-      defaultMethodOptions
+      {
+        ...defaultMethodOptions,
+        authorizationScopes: [`${customResourceServer.userPoolResourceServerId}/videos.process`]
+      }
     );
 
     // After creating the authorizer

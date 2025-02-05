@@ -44,40 +44,12 @@ class VideoService {
       if (!request.fileName || !request.fileType) {
         throw new Error('Missing required fields');
       }
-  
-      const token = await getAuthToken();
-      if (!token) {
-        throw new Error('Failed to obtain auth token');
-      }
-  
-      // Log token info for debugging
-      try {
-        const tokenParts = token.split('.');
-        const tokenPayload = JSON.parse(atob(tokenParts[1]));
-        console.log('[VideoService] Token details:', {
-          exp: new Date(tokenPayload.exp * 1000),
-          isExpired: Date.now() >= tokenPayload.exp * 1000,
-          iss: tokenPayload.iss,
-          sub: tokenPayload.sub,
-          client_id: tokenPayload.client_id,
-          token_use: tokenPayload.token_use,
-          scopes: tokenPayload.scope?.split(' ') || []
-        });
 
-        // Validate token expiration
-        if (Date.now() >= tokenPayload.exp * 1000) {
-          throw new Error('Token has expired');
-        }
-      } catch (e) {
-        console.warn('[VideoService] Could not decode token for logging:', e);
-      }
-  
       console.log('[VideoService] Preparing request:', {
         apiName: 'dubstudio',
         path: '/v1/videos',
         fileName: request.fileName,
-        fileType: request.fileType,
-        tokenPresent: !!token
+        fileType: request.fileType
       });
   
       const restOperation = post({
