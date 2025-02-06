@@ -26,31 +26,66 @@ export interface Config {
 }
 
 // Get the current environment
-const getEnvironment = (): Environment => {
+export const getEnvironment = (): Environment => {
   const env = Constants.expoConfig?.extra?.EXPO_PUBLIC_ENVIRONMENT as Environment;
   console.log('Current environment:', env);
   return env || 'development';
 };
 
+// Export API endpoints configuration
+export const apiEndpoints = {
+  videos: {
+    upload: '/v1/videos',
+    process: (videoId: string) => `/v1/videos/${videoId}/process`,
+    status: (videoId: string) => `/v1/videos/${videoId}/status`,
+  },
+};
+
 // Get configuration from environment variables
 const getConfig = (): Config => {
+  const expoConfig = Constants.expoConfig?.extra;
+  
+  if (!expoConfig) {
+    console.error('Missing Expo configuration');
+    throw new Error('Missing Expo configuration');
+  }
+
+  // Development fallback values
+  const devConfig = {
+    region: 'us-east-1',
+    userPoolId: 'us-east-1_Sv5SbRCAV',
+    userPoolClientId: '7kteo366fu3jrda6oi462mc258',
+    identityPoolId: 'us-east-1:335ded2f-915b-4d7e-9c51-369e29c706cd',
+    apiUrl: 'https://yajlya1xkl.execute-api.us-east-1.amazonaws.com/prod'
+  };
+
+  // Log raw values for debugging
+  console.log('Raw Expo config:', Constants.expoConfig);
+  console.log('Raw extra config:', expoConfig);
+  console.log('Development fallback config:', devConfig);
+
+  // Extract AWS configuration with development fallbacks
+  const awsConfig = {
+    region: expoConfig.EXPO_PUBLIC_AWS_REGION || process.env.EXPO_PUBLIC_AWS_REGION || devConfig.region,
+    userPoolId: expoConfig.EXPO_PUBLIC_AWS_USER_POOL_ID || process.env.EXPO_PUBLIC_AWS_USER_POOL_ID || devConfig.userPoolId,
+    userPoolClientId: expoConfig.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID || process.env.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID || devConfig.userPoolClientId,
+    identityPoolId: expoConfig.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID || process.env.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID || devConfig.identityPoolId
+  };
+
+  console.log('Extracted AWS config:', awsConfig);
+
   const config = {
     environment: getEnvironment(),
     api: {
-      baseUrl: Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || '',
-      timeout: Number(Constants.expoConfig?.extra?.EXPO_PUBLIC_API_TIMEOUT) || 10000,
-      retries: Number(Constants.expoConfig?.extra?.EXPO_PUBLIC_API_RETRIES) || 3,
+      baseUrl: expoConfig.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || devConfig.apiUrl,
+      timeout: Number(expoConfig.EXPO_PUBLIC_API_TIMEOUT) || 30000,
+      retries: Number(expoConfig.EXPO_PUBLIC_API_RETRIES) || 3
     },
-    aws: {
-      region: Constants.expoConfig?.extra?.EXPO_PUBLIC_AWS_REGION || 'us-east-1',
-      userPoolId: Constants.expoConfig?.extra?.EXPO_PUBLIC_AWS_USER_POOL_ID || '',
-      userPoolClientId: Constants.expoConfig?.extra?.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID || '',
-      identityPoolId: Constants.expoConfig?.extra?.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID || '',
-    },
+    aws: awsConfig,
     instagram: {
-      clientId: Constants.expoConfig?.extra?.EXPO_PUBLIC_INSTAGRAM_CLIENT_ID || '',
-      clientSecret: Constants.expoConfig?.extra?.EXPO_PUBLIC_INSTAGRAM_CLIENT_SECRET || '',
-      redirectUri: Constants.expoConfig?.extra?.EXPO_PUBLIC_INSTAGRAM_REDIRECT_URI || '',
+      clientId: expoConfig.EXPO_PUBLIC_INSTAGRAM_CLIENT_ID || process.env.EXPO_PUBLIC_INSTAGRAM_CLIENT_ID || '',
+      clientSecret: expoConfig.EXPO_PUBLIC_INSTAGRAM_CLIENT_SECRET || process.env.EXPO_PUBLIC_INSTAGRAM_CLIENT_SECRET || '',
+      redirectUri: expoConfig.EXPO_PUBLIC_INSTAGRAM_REDIRECT_URI || process.env.EXPO_PUBLIC_INSTAGRAM_REDIRECT_URI || '',
       scopes: [
         'instagram_basic',
         'instagram_manage_insights',
@@ -63,8 +98,21 @@ const getConfig = (): Config => {
       ]
     }
   };
+
+  // Validate required AWS configuration
+  const missingAwsConfig = Object.entries(awsConfig).filter(([_, value]) => !value);
+  if (missingAwsConfig.length > 0) {
+    console.error('Missing AWS configuration values:', missingAwsConfig.map(([key]) => key));
+    throw new Error(`Missing required AWS configuration: ${missingAwsConfig.map(([key]) => key).join(', ')}`);
+  }
+
+  // Validate API configuration
+  if (!config.api.baseUrl) {
+    console.error('Missing required API configuration:', config.api);
+    throw new Error('Missing required API configuration');
+  }
   
-  console.log('Generated config:', config);
+  console.log('Final validated config:', config);
   return config;
 };
 

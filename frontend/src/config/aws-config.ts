@@ -5,32 +5,28 @@ import { CognitoIdentityClient } from '@aws-sdk/client-cognito-identity';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-provider-cognito-identity';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import { config } from './env';
 
-console.log('Expo Config:', Constants.expoConfig?.extra);
-console.log('AWS Config being used:', {
-  region: config.aws.region,
-  userPoolId: config.aws.userPoolId,
-  userPoolClientId: config.aws.userPoolClientId
-});
+// Get configuration from Expo constants
+const expoConfig = Constants.expoConfig?.extra;
 
-console.log('Raw environment variables:', {
-  userPoolId: process.env.EXPO_PUBLIC_AWS_USER_POOL_ID,
-  userPoolClientId: process.env.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID,
-  region: process.env.EXPO_PUBLIC_AWS_REGION
-});
-
-console.log('Config object:', config.aws);
-
-// Check for required AWS configuration
-if (!config.aws.userPoolId || !config.aws.userPoolClientId || !config.aws.region) {
-  console.error('Missing required AWS configuration:', {
-    userPoolId: config.aws.userPoolId,
-    userPoolClientId: config.aws.userPoolClientId,
-    region: config.aws.region
-  });
-  throw new Error('Missing required AWS configuration');
+if (!expoConfig) {
+  throw new Error('Missing Expo configuration');
 }
+
+// Development values
+const config = {
+  aws: {
+    region: expoConfig.EXPO_PUBLIC_AWS_REGION || 'us-east-1',
+    userPoolId: expoConfig.EXPO_PUBLIC_AWS_USER_POOL_ID || 'us-east-1_Sv5SbRCAV',
+    userPoolClientId: expoConfig.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID || '7kteo366fu3jrda6oi462mc258',
+    identityPoolId: expoConfig.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID || 'us-east-1:335ded2f-915b-4d7e-9c51-369e29c706cd'
+  },
+  api: {
+    baseUrl: expoConfig.EXPO_PUBLIC_API_URL || 'https://yajlya1xkl.execute-api.us-east-1.amazonaws.com/prod'
+  }
+};
+
+console.log('AWS Config being used:', config.aws);
 
 // Configure token storage
 cognitoUserPoolsTokenProvider.setKeyValueStorage(AsyncStorage);
@@ -127,7 +123,7 @@ class AuthManager {
         Authorization: `Bearer ${token}`
       };
     } catch (error) {
-      console.error('[Auth] Error getting auth headers (this occurs in the', error);
+      console.error('[Auth] Error getting auth headers:', error);
       throw error;
     }
   }
@@ -146,15 +142,6 @@ class AuthManager {
 
 // Initialize auth manager
 export const authManager = AuthManager.getInstance();
-
-// Export API endpoints configuration
-export const apiEndpoints = {
-  videos: {
-    upload: `${config.api.baseUrl}/v1/videos`,
-    process: (videoId: string) => `${config.api.baseUrl}/v1/videos/${videoId}/process`,
-    status: (videoId: string) => `${config.api.baseUrl}/v1/videos/${videoId}/status`,
-  },
-};
 
 // Amplify configuration
 export const amplifyConfig = {
@@ -180,8 +167,8 @@ export const amplifyConfig = {
         endpoint: config.api.baseUrl,
         region: config.aws.region,
         custom_header: () => authManager.getAuthHeaders()
-      }
-    }
+          }
+        }
   }
 };
 

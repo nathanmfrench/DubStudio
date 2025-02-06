@@ -1,7 +1,4 @@
 import { post, get } from 'aws-amplify/api';
-import { API_URL } from '../config/constants';
-import { getAuthToken } from '../utils/auth';
-import { amplifyConfig } from '../config/aws-config';
 
 export interface UploadVideoRequest {
   fileName: string;
