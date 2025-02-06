@@ -32,8 +32,121 @@ interface UploadOptions {
 
 interface VideoFile {
   uri: string;
-  type: string;
+  mimeType: string;
   name: string;
+}
+
+interface UploadUrlResponse {
+  uploadUrl: string;
+  videoId: string;
+  key: string;
+}
+
+export class VideoUploadError extends Error {
+  constructor(message: string, public stage: 'presign' | 'upload' | 'process') {
+    super(message);
+    this.name = 'VideoUploadError';
+  }
+}
+
+async function uploadVideo(file: VideoFile) {
+  try {
+    // 1. Get presigned URL
+    console.log('[VideoService] Getting presigned URL for:', {
+      fileName: file.name,
+      type: file.mimeType
+    });
+
+    const response = await post({
+      apiName: 'dubstudio',
+      path: '/v1/videos',
+      options: {
+        body: {
+          fileType: file.mimeType,
+          fileName: file.name
+        }
+      }
+    }).response;
+
+    const { body } = response;
+    const rawData = await body.json();
+    
+    // Validate response shape
+    if (!rawData || typeof rawData !== 'object' || 
+        !('uploadUrl' in rawData) || !('videoId' in rawData) || !('key' in rawData)) {
+      throw new VideoUploadError('Invalid response format from server', 'presign');
+    }
+    
+    const data = rawData as unknown as UploadUrlResponse;
+    const { uploadUrl, videoId } = data;
+
+    console.log('[VideoService] Got presigned URL and videoId:', { videoId });
+
+    // 2. Upload to S3 using XMLHttpRequest
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', uploadUrl);
+      xhr.setRequestHeader('Content-Type', file.mimeType);
+
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState === 4) {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(null);
+          } else {
+            reject(new VideoUploadError(
+              `S3 upload failed with status ${xhr.status}: ${xhr.responseText}`,
+              'upload'
+            ));
+          }
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new VideoUploadError('Network error during upload', 'upload'));
+      };
+
+      // Get binary data using fetch
+      fetch(file.uri)
+        .then(response => response.blob())
+        .then(blob => {
+          xhr.send(blob);
+        })
+        .catch(error => {
+          reject(new VideoUploadError(`Failed to get file data: ${error.message}`, 'upload'));
+        });
+    });
+
+    console.log('[VideoService] Upload successful, triggering processing');
+
+    // 3. Trigger processing
+    await post({
+      apiName: 'dubstudio',
+      path: `/v1/videos/${videoId}/process`
+    }).response;
+
+    console.log('[VideoService] Processing triggered successfully');
+    return videoId;
+
+  } catch (error) {
+    if (error instanceof VideoUploadError) {
+      throw error;
+    }
+
+    // Determine error stage and wrap in our custom error
+    if (error instanceof Error) {
+      if (error.message.includes('presigned')) {
+        throw new VideoUploadError(`Failed to get upload URL: ${error.message}`, 'presign');
+      } else if (error.message.includes('process')) {
+        throw new VideoUploadError(`Failed to trigger processing: ${error.message}`, 'process');
+      }
+    }
+
+    // Generic error case
+    throw new VideoUploadError(
+      error instanceof Error ? error.message : 'Unknown error during upload',
+      'upload'
+    );
+  }
 }
 
 class VideoService {
@@ -113,7 +226,7 @@ class VideoService {
       presignedUrl: presignedUrl.substring(0, 50) + '...',
       file: {
         name: file.name,
-        type: file.type,
+        type: file.mimeType,
       }
     });
 
@@ -151,17 +264,18 @@ class VideoService {
 
       try {
         xhr.open('PUT', presignedUrl);
-        xhr.setRequestHeader('Content-Type', file.type);
+        xhr.setRequestHeader('Content-Type', file.mimeType);
         
-        // Create FormData and append file
-        const formData = new FormData();
-        formData.append('file', {
-          uri: file.uri,
-          type: file.type,
-          name: file.name
-        } as any);
-
-        xhr.send(formData);
+        // Instead of FormData, use fetch to get the binary data
+        fetch(file.uri)
+          .then(response => response.blob())
+          .then(blob => {
+            xhr.send(blob);
+          })
+          .catch(error => {
+            console.error('[VideoService] Error getting file blob:', error);
+            reject(error);
+          });
       } catch (error) {
         console.error('[VideoService] Error initiating upload:', error);
         reject(error);
@@ -208,6 +322,8 @@ class VideoService {
       throw error;
     }
   }
+
+  uploadVideo = uploadVideo;
 }
 
 export const videoService = new VideoService(); 

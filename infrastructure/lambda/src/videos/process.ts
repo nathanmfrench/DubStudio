@@ -1,21 +1,13 @@
-import { Handler, APIGatewayProxyEvent } from 'aws-lambda';
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+import { Handler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { success, error, AuthenticatedEvent } from '../types/api';
-import { S3 } from 'aws-sdk';
+import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { success, error, AuthenticatedEvent, getUserId } from '../types/api';
 
-const lambdaClient = new LambdaClient({});
 const dynamodbClient = new DynamoDBClient({});
 const dynamodb = DynamoDBDocumentClient.from(dynamodbClient);
+const s3Client = new S3Client({});
 const VIDEOS_TABLE_NAME = process.env.VIDEOS_TABLE_NAME || '';
-const DUBBING_FUNCTION_NAME = process.env.DUBBING_FUNCTION_NAME || '';
-const SUBTITLE_FUNCTION_NAME = process.env.SUBTITLE_FUNCTION_NAME!;
-const s3 = new S3();
-
-if (!process.env.SUBTITLE_FUNCTION_NAME) {
-  throw new Error('SUBTITLE_FUNCTION_NAME environment variable not set');
-}
 
 // Mock video processor (keep this until real implementation)
 async function processVideoContent(input: Buffer): Promise<Buffer> {
@@ -30,11 +22,11 @@ async function handleVideoProcessing(userId: string, videoId: string): Promise<v
     Key: `uploads/${userId}/${videoId}/original.mp4`
   };
   
-  const rawData = await s3.getObject(getParams).promise();
+  const rawData = await s3Client.send(new GetObjectCommand(getParams));
   if (!rawData.Body) throw new Error('Empty video file');
 
   // 2. Process content
-  const processedBuffer = await processVideoContent(rawData.Body as Buffer);
+  const processedBuffer = await processVideoContent(rawData.Body as unknown as Buffer);
 
   // 3. Store processed video
   const putParams = {
@@ -42,26 +34,26 @@ async function handleVideoProcessing(userId: string, videoId: string): Promise<v
     Key: `videos/${userId}/${videoId}/final.mp4`,
     Body: processedBuffer
   };
-  await s3.putObject(putParams).promise();
+  await s3Client.send(new PutObjectCommand(putParams));
 
   // 4. Cleanup raw file
   await Promise.all([
     // Raw file
-    s3.deleteObject({
+    s3Client.send(new DeleteObjectCommand({
       Bucket: 'dubstudio-raw-videos',
       Key: `uploads/${userId}/${videoId}/original.mp4`
-    }).promise(),
+    })),
     
     // Processed file
-    s3.deleteObject({
+    s3Client.send(new DeleteObjectCommand({
       Bucket: 'dubstudio-processed-videos',
       Key: `videos/${userId}/${videoId}/final.mp4`
-    }).promise()
+    }))
   ]);
 }
 
 // Lambda entry point
-export const handler: Handler<APIGatewayProxyEvent> = async (event, context) => {
+export const handler: Handler<AuthenticatedEvent> = async (event, context) => {
   console.log({
     stage: 'START',
     functionName: 'process-handler',  
@@ -70,28 +62,58 @@ export const handler: Handler<APIGatewayProxyEvent> = async (event, context) => 
     event: {
       path: event.path,
       httpMethod: event.httpMethod,
-      pathParameters: event.pathParameters
+      pathParameters: event.pathParameters,
+      authorizer: event.requestContext.authorizer
     }
   });
 
   try {
-    // Extract user context
-    const userId = event.requestContext?.authorizer?.userId 
-                   || event.headers?.['x-user-id'];
-    if (!userId) return error(401, 'Unauthorized');
+    // Extract user ID from Cognito claims
+    const userId = getUserId(event);
+    if (!userId) {
+      console.error('No user ID found in request context');
+      return error(401, 'Unauthorized - No user ID found');
+    }
 
-    // Add proper body parsing
-    const body = typeof event.body === 'string' ? 
-      JSON.parse(event.body) : 
-      event.body || event;
-    
-    // Add path parameter fallback
-    const videoId = body.videoId || event.pathParameters?.videoId;
-    if (!videoId) return error(400, 'Missing videoId');
+    // Get video ID from path parameters
+    const videoId = event.pathParameters?.videoId;
+    if (!videoId) {
+      return error(400, 'Missing videoId parameter');
+    }
+
+    // Get video from DynamoDB to verify ownership
+    const getResult = await dynamodb.send(new GetCommand({
+      TableName: VIDEOS_TABLE_NAME,
+      Key: {
+        userId,
+        videoId
+      }
+    }));
+
+    if (!getResult.Item) {
+      return error(404, 'Video not found');
+    }
+
+    // Update video status to processing
+    await dynamodb.send(new UpdateCommand({
+      TableName: VIDEOS_TABLE_NAME,
+      Key: {
+        userId,
+        videoId
+      },
+      UpdateExpression: 'SET #status = :status, updatedAt = :updatedAt',
+      ExpressionAttributeNames: {
+        '#status': 'status'
+      },
+      ExpressionAttributeValues: {
+        ':status': 'processing',
+        ':updatedAt': new Date().toISOString()
+      }
+    }));
 
     // Execute processing
     await handleVideoProcessing(userId, videoId);
-    return success({ status: 'completed' });
+    return success({ status: 'processing' });
 
   } catch (err) {
     console.error('Processing failed:', err);
@@ -102,36 +124,36 @@ export const handler: Handler<APIGatewayProxyEvent> = async (event, context) => 
 const processVideo = async (userId: string, videoId: string) => {
   try {
     // Get object as buffer instead of stream
-    const { Body } = await s3.getObject({
+    const rawData = await s3Client.send(new GetObjectCommand({
       Bucket: 'dubstudio-raw-videos',
       Key: `uploads/${userId}/${videoId}/original.mp4`
-    }).promise();
+    }));
 
-    if (!Body) throw new Error('Empty video file');
+    if (!rawData.Body) throw new Error('Empty video file');
     
     // Process video buffer
-    const processedBuffer = await processVideoContent(Body as Buffer);
+    const processedBuffer = await processVideoContent(rawData.Body as unknown as Buffer);
     
     // Upload to processed bucket
-    await s3.putObject({
+    await s3Client.send(new PutObjectCommand({
       Bucket: 'dubstudio-processed-videos',
       Key: `videos/${userId}/${videoId}/final.mp4`,
       Body: processedBuffer
-    }).promise();
+    }));
 
     // Delete immediately after processing
     await Promise.all([
       // Raw file
-      s3.deleteObject({
+      s3Client.send(new DeleteObjectCommand({
         Bucket: 'dubstudio-raw-videos',
         Key: `uploads/${userId}/${videoId}/original.mp4`
-      }).promise(),
+      })),
       
       // Processed file
-      s3.deleteObject({
+      s3Client.send(new DeleteObjectCommand({
         Bucket: 'dubstudio-processed-videos',
         Key: `videos/${userId}/${videoId}/final.mp4`
-      }).promise()
+      }))
     ]);
 
   } catch (err) {           

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { signIn, signUp, signOut, getCurrentUser, confirmSignUp, resetPassword, confirmResetPassword, resendSignUpCode, fetchAuthSession } from 'aws-amplify/auth';
+import { signUp, signOut, confirmSignUp, resetPassword, confirmResetPassword, resendSignUpCode } from 'aws-amplify/auth';
 import type { SignUpInput } from 'aws-amplify/auth';
+import { auth } from '../config/aws-config';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -31,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function checkAuthState() {
     setLoading(true);
     try {
-      const authUser = await getCurrentUser();
+      const { user: authUser } = await auth.checkAuthState();
       setUser(authUser);
       setIsAuthenticated(true);
     } catch {
@@ -46,47 +47,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      console.log('AuthContext: Starting sign in with SRP...');
-      
-      const signInResult = await signIn({
-        username: email,
-        password,
-        options: {
-          authFlowType: 'USER_SRP_AUTH'
-        }
-      });
-      
-      console.log('AuthContext: Sign in result:', {
-        isSignedIn: signInResult.isSignedIn,
-        nextStep: signInResult.nextStep
-      });
+      const signInResult = await auth.signIn(email, password);
       
       if (signInResult.isSignedIn) {
-        const session = await fetchAuthSession();
-        console.log('AuthContext: Session fetched:', {
-          hasIdToken: !!session.tokens?.idToken,
-          hasAccessToken: !!session.tokens?.accessToken,
-          accessTokenScopes: session.tokens?.accessToken?.payload.scope?.split(' ') || [],
-          tokenExpiration: session.tokens?.accessToken?.payload.exp ? 
-            new Date(session.tokens.accessToken.payload.exp * 1000).toISOString() : 
-            'No expiration'
-        });
-        
-        if (!session.tokens?.accessToken) {
-          throw new Error('No access token received after successful sign in');
-        }
-        
-        const currentUser = await getCurrentUser();
+        const { user: currentUser } = await auth.checkAuthState();
         setUser(currentUser);
         setIsAuthenticated(true);
-        console.log('AuthContext: Successfully signed in and set user state');
-        
         return signInResult;
       } else {
         throw new Error('Sign in failed - user not signed in after completion');
       }
     } catch (error) {
-      console.error('AuthContext: Sign in error:', error);
       setUser(null);
       setIsAuthenticated(false);
       setError(error instanceof Error ? error.message : 'An error occurred during sign in');

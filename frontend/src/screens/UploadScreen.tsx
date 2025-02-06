@@ -79,16 +79,6 @@ interface ProcessingStatus {
   };
 }
 
-interface AccountCreationDetails {
-  username: string;
-  password: string;
-  email?: string;
-  bio?: string;
-  profilePicture?: string;
-  language: string;
-  languageName: string;
-}
-
 interface UploadState {
   sourceLanguage: string;
   caption: string;
@@ -121,6 +111,21 @@ interface VideoFormData {
   uri: string;
   type: string;
   name: string;
+}
+
+interface ProcessResponse {
+  success: boolean;
+  error?: string;
+}
+
+interface StatusResponse {
+  status: 'pending_upload' | 'uploading' | 'processing' | 'completed' | 'failed';
+  progress?: number;
+  error?: string;
+}
+
+interface DownloadResponse {
+  url: string;
 }
 
 const initialDubbingProgress: DubbingProgress = {
@@ -1175,7 +1180,7 @@ export const UploadScreen: React.FC = () => {
         uploadUrlResponse.uploadUrl,
         {
           uri: selectedVideo.uri,
-          type: 'video/mp4',
+          mimeType: 'video/mp4',
           name: selectedVideo.name,
         },
         {
@@ -1190,33 +1195,40 @@ export const UploadScreen: React.FC = () => {
       const videoId = uploadUrlResponse.videoId;
       setProcessingProgress(70);
 
-      // Start subtitle processing
-      const processResponse = await fetch(`${config.api.baseUrl}/v1/videos/${videoId}/process`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sourceLanguage: uploadState.sourceLanguage,
-          targetLanguages: uploadState.targetLanguages,
-          translationType: 'subtitles',
-          caption: uploadState.caption,
-        }),
-      });
+      // Start subtitle processing using Amplify post
+      const processResponse = await post({
+        apiName: 'dubstudio',
+        path: `/v1/videos/${videoId}/process`,
+        options: {
+          body: {
+            sourceLanguage: uploadState.sourceLanguage,
+            targetLanguages: uploadState.targetLanguages,
+            translationType: 'subtitles',
+            caption: uploadState.caption,
+          }
+        }
+      }).response;
 
-      if (!processResponse.ok) {
-        throw new Error('Failed to process video');
+      const rawProcessData = await processResponse.body.json();
+      const processData = rawProcessData as unknown as ProcessResponse;
+      if (!processData.success) {
+        throw new Error(processData.error || 'Failed to process video');
       }
 
       setProcessingProgress(80);
 
-      // Poll for status until complete
+      // Poll for status until complete using Amplify get
       let status = 'processing';
       while (status === 'processing') {
         await new Promise(resolve => setTimeout(resolve, 2000)); // Poll every 2 seconds
 
-        const statusResponse = await fetch(`${config.api.baseUrl}/v1/videos/${videoId}/status`);
-        const statusData = await statusResponse.json();
+        const statusResponse = await get({
+          apiName: 'dubstudio',
+          path: `/v1/videos/${videoId}/status`
+        }).response;
+
+        const rawStatusData = await statusResponse.body.json();
+        const statusData = rawStatusData as unknown as StatusResponse;
         
         if (statusData.status === 'completed') {
           status = 'completed';
@@ -1227,11 +1239,21 @@ export const UploadScreen: React.FC = () => {
           setProcessingProgress(70 + (statusData.progress || 0) * 0.2); // Use 20% for processing
         }
       }
+      console.log('brutha going crazy atm. downloading the video now for the last 10% in the status bar');
+      // Download the processed video using Amplify get
+      const downloadResponse = await get({
+        apiName: 'dubstudio',
+        path: `/v1/videos/${videoId}/download`
+      }).response;
 
-      // Download the processed video
-      const downloadUrl = `${config.api.baseUrl}/v1/videos/${videoId}/download`;
+      const rawDownloadData = await downloadResponse.body.json();
+      const downloadData = rawDownloadData as unknown as DownloadResponse;
+      if (!downloadData?.url) {
+        throw new Error('No download URL provided');
+      }
+
       const filename = `subtitled_${selectedVideo.name}`;
-      const localUri = await downloadVideo(downloadUrl, filename);
+      const localUri = await downloadVideo(downloadData.url, filename);
 
       Alert.alert(
         'Download Complete',

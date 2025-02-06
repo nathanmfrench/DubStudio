@@ -1,9 +1,10 @@
 {
   "InfrastructureStack": {
-    "DubStudioApiEndpointB71F861D": "https://ldxowznji4.execute-api.us-east-1.amazonaws.com/prod/",
-    "DubStudioApiUrl": "https://ldxowznji4.execute-api.us-east-1.amazonaws.com/prod/",
+    "DubStudioApiEndpointB71F861D": "https://yajlya1xkl.execute-api.us-east-1.amazonaws.com/prod/",
+    "DubStudioApiUrl": "https://yajlya1xkl.execute-api.us-east-1.amazonaws.com/prod/",
     "DubStudioRegion": "us-east-1",
-    "DubStudioUserPoolClientId": "15mqqadlgh0ha4roh9a3luod19",
-    "DubStudioUserPoolId": "us-east-1_eDCNcqxXA"
+    "DubStudioUserPoolClientId": "7kteo366fu3jrda6oi462mc258",
+    "DubStudioUserPoolId": "us-east-1_Sv5SbRCAV",
+    "IdentityPoolId": "us-east-1:335ded2f-915b-4d7e-9c51-369e29c706cd"
   }
 }

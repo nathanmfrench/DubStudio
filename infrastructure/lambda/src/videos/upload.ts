@@ -21,23 +21,17 @@ interface UploadRequestBody {
 
 // Sanitize filename to prevent path traversal
 function sanitizeFileName(fileName: string): string {
-  // Get the base name and remove any path components
-  const baseName = path.basename(fileName);
-  // Remove any non-alphanumeric characters except for dots, dashes, and underscores
-  return baseName.replace(/[^a-zA-Z0-9.-_]/g, '_');
+  return path.basename(fileName).replace(/[^a-zA-Z0-9.-_]/g, '_');
 }
 
 export const handler = async (event: AuthenticatedEvent) => {
-  console.log({
-    stage: 'START',
-    functionName: 'upload-handler',
-    requestId: event.requestContext.requestId,
-    timestamp: new Date().toISOString(),
-    event: {
-      path: event.path,
-      httpMethod: event.httpMethod,
-      headers: event.headers
-    }
+  console.log('Upload handler started with full event:', JSON.stringify(event, null, 2));
+  console.log('Authorization details:', {
+    headers: event.headers,
+    authorizer: event.requestContext?.authorizer,
+    claims: event.requestContext?.authorizer?.claims,
+    principalId: event.requestContext?.authorizer?.claims.principalId,
+    timestamp: new Date().toISOString()
   });
 
   try {
@@ -82,6 +76,17 @@ export const handler = async (event: AuthenticatedEvent) => {
 
     // Get user ID from Cognito claims
     const userId = getUserId(event);
+    console.log('Auth context:', {
+      claims: event.requestContext.authorizer?.claims,
+      userId,
+      rawAuthContext: event.requestContext.authorizer
+    });
+
+    if (!userId) {
+      console.error('No user ID found in request context');
+      return error(401, 'Unauthorized - No user ID found');
+    }
+
     const videoId = randomUUID();
     const sanitizedFileName = sanitizeFileName(body.fileName);
 
@@ -95,7 +100,7 @@ export const handler = async (event: AuthenticatedEvent) => {
       timestamp: new Date().toISOString()
     });
 
-    // Generate a unique key for the video with sanitized filename
+    // Generate a unique key under the user's directory
     const key = `uploads/${userId}/${videoId}/${sanitizedFileName}`;
 
     console.log({
@@ -105,7 +110,7 @@ export const handler = async (event: AuthenticatedEvent) => {
       timestamp: new Date().toISOString()
     });
 
-    // Create presigned URL for upload with specific conditions
+    // Create presigned URL with specific conditions
     const command = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,
@@ -130,39 +135,23 @@ export const handler = async (event: AuthenticatedEvent) => {
       expiresIn: 3600 // 1 hour
     });
 
-    // Create video record in DynamoDB
-    const item = {
-      userId,
-      videoId,
-      fileName: sanitizedFileName,
-      originalFileName: body.fileName,
-      status: 'pending_upload',
-      s3Key: key,
-      contentType: body.fileType,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    console.log({
-      stage: 'PROCESSING',
-      action: 'create_dynamodb_record',
-      tableName: TABLE_NAME,
-      item,
-      timestamp: new Date().toISOString()
-    });
-
+    // Create initial video record
     await ddbDocClient.send(new PutCommand({
       TableName: TABLE_NAME,
-      Item: item
+      Item: {
+        userId,
+        videoId,
+        fileName: sanitizedFileName,
+        originalFileName: body.fileName,
+        status: 'pending_upload',
+        s3Key: key,
+        contentType: body.fileType,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
     }));
 
-    console.log({
-      stage: 'COMPLETE',
-      videoId,
-      key,
-      status: 'success',
-      timestamp: new Date().toISOString()
-    });
+    console.log('Upload URL generated:', { userId, videoId, key });
 
     // Return the presigned URL and video details
     return success({
@@ -172,12 +161,7 @@ export const handler = async (event: AuthenticatedEvent) => {
     });
 
   } catch (err) {
-    console.error({
-      stage: 'ERROR',
-      error: err instanceof Error ? err.message : 'Unknown error',
-      stack: err instanceof Error ? err.stack : undefined,
-      timestamp: new Date().toISOString()
-    });
+    console.error('Error in upload handler:', err);
     return error(500, 'Internal server error');
   }
 }; 

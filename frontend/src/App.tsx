@@ -6,7 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Amplify } from 'aws-amplify';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { Settings } from 'react-native-fbsdk-next';
-import { amplifyConfig, checkAuthState } from './config/aws-config';
+import { amplifyConfig, auth } from './config/aws-config';
 import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider } from './contexts/ThemeContext';
 
@@ -37,7 +37,7 @@ export default function App() {
         console.log('Starting app initialization...');
         
         // Check auth state after Amplify is configured
-        await checkAuthState();
+        await auth.checkAuthState();
 
         // 1. Initialize Facebook SDK
         Settings.initializeSDK();

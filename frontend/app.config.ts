@@ -113,6 +113,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       EXPO_PUBLIC_AWS_REGION: process.env.EXPO_PUBLIC_AWS_REGION,
       EXPO_PUBLIC_AWS_USER_POOL_ID: process.env.EXPO_PUBLIC_AWS_USER_POOL_ID,
       EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID: process.env.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID,
+      EXPO_PUBLIC_AWS_IDENTITY_POOL_ID: process.env.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID,
       eas: {
         projectId: 'a3a24494-5f90-4ec5-8609-cd7eecfe29b3'
       },

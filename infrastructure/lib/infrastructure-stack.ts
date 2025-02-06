@@ -170,81 +170,17 @@ export class InfrastructureStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN
     });
 
-    // Add domain to user pool
-    const domain = userPool.addDomain('DubStudioAuthDomain', {
-      cognitoDomain: {
-        domainPrefix: 'dubstudio-auth'
-      }
-    });
-
-    // Define custom resource scopes
-    const customResourceServer = userPool.addResourceServer('DubStudioResourceServer', {
-      identifier: 'dubstudio',
-      userPoolResourceServerName: 'DubStudio Resource Server',
-      scopes: [
-        {
-          scopeName: 'videos.upload',
-          scopeDescription: 'Permission to upload videos to DubStudio'
-        },
-        {
-          scopeName: 'videos.process',
-          scopeDescription: 'Permission to process videos in DubStudio'
-        },
-        {
-          scopeName: 'videos.read',
-          scopeDescription: 'Permission to read video status and metadata in DubStudio'
-        }
-      ]
-    });
-
     // Create Cognito User Pool Client
     const userPoolClient = new cognito.UserPoolClient(this, 'DubStudioUserPoolClient', {
       userPool,
       authFlows: {
         userSrp: true,
-        adminUserPassword: true,
-        custom: true,
-        userPassword: true
+        adminUserPassword: false,
+        custom: false,
+        userPassword: false
       },
-      oAuth: {
-        flows: {
-          implicitCodeGrant: true,
-          authorizationCodeGrant: true
-        },
-        scopes: [
-          cognito.OAuthScope.OPENID,
-          cognito.OAuthScope.EMAIL,
-          cognito.OAuthScope.PROFILE,
-          cognito.OAuthScope.COGNITO_ADMIN,
-          cognito.OAuthScope.custom(`${customResourceServer.userPoolResourceServerId}/videos.upload`),
-          cognito.OAuthScope.custom(`${customResourceServer.userPoolResourceServerId}/videos.process`),
-          cognito.OAuthScope.custom(`${customResourceServer.userPoolResourceServerId}/videos.read`)
-        ],
-        callbackUrls: [
-          'exp://localhost:19000/--/',
-          'exp://localhost:19001/--/',
-          'dubstudio://',
-          'http://localhost:19000/',
-          'http://localhost:19001/',
-          'http://localhost/'
-        ],
-        logoutUrls: [
-          'exp://localhost:19000/--/',
-          'exp://localhost:19001/--/',
-          'dubstudio://',
-          'http://localhost:19000/',
-          'http://localhost:19001/',
-          'http://localhost/'
-        ]
-      },
-      accessTokenValidity: cdk.Duration.days(1),
-      refreshTokenValidity: cdk.Duration.days(30),
-      enableTokenRevocation: true,
       preventUserExistenceErrors: true,
       generateSecret: false,
-      supportedIdentityProviders: [
-        cognito.UserPoolClientIdentityProvider.COGNITO
-      ],
       readAttributes: new cognito.ClientAttributes()
         .withStandardAttributes({
           email: true,
@@ -263,7 +199,7 @@ export class InfrastructureStack extends cdk.Stack {
         .withCustomAttributes('tier', 'credits')
     });
 
-    const exampleLambdaLogGroup = new logs.LogGroup(this, 'ExampleLambdaLogGroup', {
+    const dubbywubbyLogGroup = new logs.LogGroup(this, 'DubbyWubbyLogGroup', {
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY // Optional: auto-delete logs on stack deletion
     });
@@ -272,10 +208,11 @@ export class InfrastructureStack extends cdk.Stack {
     const commonLambdaConfig = {
       runtime: lambda.Runtime.NODEJS_18_X,
       architecture: lambda.Architecture.ARM_64,
-      logGroup: exampleLambdaLogGroup,
+      logGroup: dubbywubbyLogGroup,
       environment: {
         NODE_ENV: 'production',
         BUCKET_NAME: bucket.bucketName,
+        LOG_LEVEL: 'DEBUG'  // Enable detailed logging
       },
       bundling: {
         minify: true,
@@ -369,30 +306,17 @@ export class InfrastructureStack extends cdk.Stack {
     // 3. Add invocation permission
     videoDubbingHandler.grantInvoke(videoProcessHandler);
     subtitleHandler.grantInvoke(videoProcessHandler) // ✅ Allows process to trigger subtitle
-    // Grant necessary permissions
-    bucket.grantReadWrite(videoUploadHandler);
-    bucket.grantReadWrite(videoDubbingHandler);
-    videosTable.grantReadWriteData(videoUploadHandler);
-    videosTable.grantReadWriteData(videoStatusHandler);
-    videosTable.grantReadWriteData(videoProcessHandler);
-    videosTable.grantReadWriteData(videoDubbingHandler);
-    elevenLabsSecret.grantRead(videoDubbingHandler);
-    bucket.grantReadWrite(subtitleHandler);
-    videosTable.grantReadWriteData(subtitleHandler);
-
-    // Add explicit permissions for presigned URL generation
+    // Grant necessary permissions for the upload handler
     videoUploadHandler.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
         's3:PutObject',
         's3:GetObject',
         's3:PutObjectAcl',
-        's3:GetObjectAcl',
-        's3:ListBucket'
+        's3:GetObjectAcl'
       ],
       resources: [
-        bucket.arnForObjects('*'),
-        bucket.bucketArn
+        bucket.arnForObjects('uploads/*')
       ]
     }));
 
@@ -408,15 +332,19 @@ export class InfrastructureStack extends cdk.Stack {
         's3:PutObject',
         's3:GetObject'
       ],
-      resources: [bucket.arnForObjects('*')]
+      resources: [bucket.arnForObjects('uploads/*')]
     }));
 
-    // Add CORS rule specifically for presigned URLs
+    // Grant DynamoDB permissions
+    videosTable.grantWriteData(videoUploadHandler);
+
+    // Add CORS rule for uploads
     bucket.addCorsRule({
       allowedMethods: [
         s3.HttpMethods.PUT,
         s3.HttpMethods.POST,
-        s3.HttpMethods.GET
+        s3.HttpMethods.GET,
+        s3.HttpMethods.HEAD
       ],
       allowedOrigins: [
         'http://localhost:19000',
@@ -453,12 +381,12 @@ export class InfrastructureStack extends cdk.Stack {
       resources: [userPool.userPoolArn]
     }));
 
-    // Create API Gateway with CORS
+    // Create API Gateway with Cognito authorizer
     const api = new apigateway.RestApi(this, 'DubStudioApi', {
       restApiName: 'DubStudio API',
       description: 'API for DubStudio video processing',
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS, // Restrict in production
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
         allowHeaders: [
           'Content-Type',
@@ -470,33 +398,71 @@ export class InfrastructureStack extends cdk.Stack {
         maxAge: cdk.Duration.days(1)
       },
       deployOptions: {
-        stageName: 'prod',
-        tracingEnabled: true,
+        accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
         metricsEnabled: true,
-      },
+        accessLogDestination: new apigateway.LogGroupLogDestination(dubbywubbyLogGroup)
+      }
+    });
+
+    // Create Cognito Identity Pool
+    const identityPool = new cognito.CfnIdentityPool(this, 'DubStudioIdentityPool', {
+      allowUnauthenticatedIdentities: false,
+      cognitoIdentityProviders: [{
+        clientId: userPoolClient.userPoolClientId,
+        providerName: userPool.userPoolProviderName,
+        serverSideTokenCheck: true
+      }]
+    });
+
+    // Create roles for authenticated users
+    const authenticatedRole = new iam.Role(this, 'CognitoAuthenticatedRole', {
+      assumedBy: new iam.FederatedPrincipal('cognito-identity.amazonaws.com', {
+        StringEquals: {
+          'cognito-identity.amazonaws.com:aud': identityPool.ref
+        },
+        'ForAnyValue:StringLike': {
+          'cognito-identity.amazonaws.com:amr': 'authenticated'
+        }
+      }, 'sts:AssumeRoleWithWebIdentity')
+    });
+
+    // Add permissions for authenticated users
+    authenticatedRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'execute-api:Invoke'
+      ],
+      resources: [
+        `arn:aws:execute-api:${this.region}:${this.account}:${api.restApiId}/*`
+      ]
+    }));
+
+    // Attach roles to identity pool
+    new cognito.CfnIdentityPoolRoleAttachment(this, 'IdentityPoolRoleAttachment', {
+      identityPoolId: identityPool.ref,
+      roles: {
+        authenticated: authenticatedRole.roleArn
+      }
+    });
+
+    // Output identity pool ID
+    new cdk.CfnOutput(this, 'IdentityPoolId', {
+      value: identityPool.ref,
+      description: 'ID of the Cognito Identity Pool'
     });
 
     // Create Cognito authorizer
     const apiAuthorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'DubStudioApiAuthorizer', {
       cognitoUserPools: [userPool],
-      identitySource: 'method.request.header.Authorization',
-      resultsCacheTtl: cdk.Duration.minutes(5),
+      identitySource: 'method.request.header.Authorization'
     });
 
-    // Update API Gateway authorizer scopes
+    // Update API Gateway authorizer options
     const defaultMethodOptions: apigateway.MethodOptions = {
       authorizer: apiAuthorizer,
-      authorizationType: apigateway.AuthorizationType.COGNITO,
-      authorizationScopes: [
-        'openid',
-        'email',
-        'profile',
-        `${customResourceServer.userPoolResourceServerId}/videos.upload`,
-        `${customResourceServer.userPoolResourceServerId}/videos.process`,
-        `${customResourceServer.userPoolResourceServerId}/videos.read`
-      ]
+      authorizationType: apigateway.AuthorizationType.COGNITO
     };
 
     // Create API resources and methods with updated scopes
@@ -510,28 +476,19 @@ export class InfrastructureStack extends cdk.Stack {
     apiVideos.addMethod(
       'POST',
       new apigateway.LambdaIntegration(videoUploadHandler),
-      {
-        ...defaultMethodOptions,
-        authorizationScopes: [`${customResourceServer.userPoolResourceServerId}/videos.upload`]
-      }
+      defaultMethodOptions
     );
 
     apiVideoStatus.addMethod(
       'GET',
       new apigateway.LambdaIntegration(videoStatusHandler),
-      {
-        ...defaultMethodOptions,
-        authorizationScopes: [`${customResourceServer.userPoolResourceServerId}/videos.read`]
-      }
+      defaultMethodOptions
     );
 
     apiVideoProcess.addMethod(
       'POST',
       new apigateway.LambdaIntegration(videoProcessHandler),
-      {
-        ...defaultMethodOptions,
-        authorizationScopes: [`${customResourceServer.userPoolResourceServerId}/videos.process`]
-      }
+      defaultMethodOptions
     );
 
     // After creating the authorizer

@@ -15,6 +15,7 @@ export interface Config {
     region: string;
     userPoolId: string;
     userPoolClientId: string;
+    identityPoolId: string;
   };
   instagram: {
     clientId: string;
@@ -44,6 +45,7 @@ const getConfig = (): Config => {
       region: Constants.expoConfig?.extra?.EXPO_PUBLIC_AWS_REGION || 'us-east-1',
       userPoolId: Constants.expoConfig?.extra?.EXPO_PUBLIC_AWS_USER_POOL_ID || '',
       userPoolClientId: Constants.expoConfig?.extra?.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID || '',
+      identityPoolId: Constants.expoConfig?.extra?.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID || '',
     },
     instagram: {
       clientId: Constants.expoConfig?.extra?.EXPO_PUBLIC_INSTAGRAM_CLIENT_ID || '',

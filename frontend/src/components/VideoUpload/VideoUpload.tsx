@@ -10,7 +10,7 @@ interface VideoUploadProps {
 
 interface VideoFile {
   uri: string;
-  type: string;
+  mimeType: string;
   name: string;
 }
 
@@ -60,7 +60,7 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({ onUploadComplete, onEr
         // Prepare file object
         const videoFile: VideoFile = {
           uri: file.uri,
-          type: file.mimeType,
+          mimeType: file.mimeType,
           name: file.name,
         };
 

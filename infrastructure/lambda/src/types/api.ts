@@ -12,6 +12,7 @@ export interface ErrorResponse extends ApiResponse {
 
 export interface CognitoAuthorizerContext {
   claims: {
+    principalId: string;
     sub: string;
     email: string;
     email_verified: string;
