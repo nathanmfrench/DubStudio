@@ -211,6 +211,7 @@ export class InfrastructureStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_18_X,
       architecture: lambda.Architecture.ARM_64,
       logGroup: dubbywubbyLogGroup,
+      timeout: cdk.Duration.minutes(1),
       environment: {
         NODE_ENV: 'production',
         RAW_VIDEOS_BUCKET: rawVideosBucket.bucketName,
@@ -236,7 +237,7 @@ export class InfrastructureStack extends cdk.Stack {
       runtime: lambda.Runtime.PYTHON_3_9,
       architecture: lambda.Architecture.ARM_64,
       code: lambda.Code.fromAsset('lambda'),
-      handler: 'src/handlers/videos/subtitle.handler',
+      handler: 'dist/handlers/videos/subtitle.handler',
       layers: [processingLayer],
       timeout: cdk.Duration.minutes(15),
       memorySize: 1024,
@@ -253,7 +254,7 @@ export class InfrastructureStack extends cdk.Stack {
       runtime: lambda.Runtime.PYTHON_3_9,
       architecture: lambda.Architecture.ARM_64,
       code: lambda.Code.fromAsset('lambda'),
-      handler: 'src/handlers/videos/dubbing.handler',
+      handler: 'dist/handlers/videos/dubbing.handler',
       layers: [processingLayer],
       timeout: cdk.Duration.minutes(15),
       memorySize: 1024,
@@ -277,19 +278,19 @@ export class InfrastructureStack extends cdk.Stack {
     const videoUploadHandler = new lambda.Function(this, 'VideoUploadFunction', {
       ...commonLambdaConfig,
       code: lambda.Code.fromAsset('lambda'),
-      handler: 'src/handlers/videos/upload.handler',
+      handler: 'dist/handlers/videos/upload.handler',
     });
 
     const videoStatusHandler = new lambda.Function(this, 'VideoStatusFunction', {
       ...commonLambdaConfig,
       code: lambda.Code.fromAsset('lambda'),
-      handler: 'src/handlers/videos/status.handler',
+      handler: 'dist/handlers/videos/status.handler',
     });
 
     const videoProcessHandler = new lambda.Function(this, 'VideoProcessFunction', {
       ...commonLambdaConfig,
       code: lambda.Code.fromAsset('lambda'),
-      handler: 'src/handlers/videos/process.handler',
+      handler: 'dist/handlers/videos/process.handler',
       environment: {
         ...commonLambdaConfig.environment,
         SUBTITLE_FUNCTION: subtitleHandler.functionName,
@@ -338,9 +339,13 @@ export class InfrastructureStack extends cdk.Stack {
       principals: [new iam.ArnPrincipal(videoUploadHandler.role!.roleArn)],
       actions: [
         's3:PutObject',
-        's3:GetObject'
+        's3:GetObject',
+        's3:GetBucketTagging'
       ],
-      resources: [rawVideosBucket.arnForObjects('uploads/*')]
+      resources: [
+        rawVideosBucket.arnForObjects('uploads/*'),
+        rawVideosBucket.bucketArn
+      ]
     }));
 
     // Grant DynamoDB permissions
