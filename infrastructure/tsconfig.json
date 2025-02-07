@@ -21,7 +21,7 @@
       "./node_modules/@types",
       "./lambda/node_modules/@types"
     ],
-    "outDir": "./lib",
+    "outDir": "./dist",
     "rootDir": ".",
     "esModuleInterop": true,
     "moduleResolution": "NodeNext",
@@ -37,6 +37,7 @@
   ],
   "exclude": [
     "node_modules",
-    "cdk.out"
+    "cdk.out",
+    "dist"
   ]
 }
