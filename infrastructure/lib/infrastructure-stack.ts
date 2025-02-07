@@ -26,44 +26,6 @@ export class InfrastructureStack extends cdk.Stack {
       'ELEVENLABS_API_KEY'
     );
 
-    // Create S3 bucket for video uploads with proper CORS
-    const bucket = new s3.Bucket(this, 'DubStudioStorage', {
-      bucketName: `dubstudio-videos-${accountId}-${env}`,
-      versioned: true,
-      cors: [{
-        allowedMethods: [
-          s3.HttpMethods.GET,
-          s3.HttpMethods.PUT,
-          s3.HttpMethods.POST,
-          s3.HttpMethods.DELETE,
-        ],
-        allowedOrigins: [
-          'http://localhost:19000',
-          'http://localhost:19001',
-          'exp://localhost:19000',
-          'exp://localhost:19001',
-        ],
-        allowedHeaders: ['*'],
-        exposedHeaders: [
-          'ETag',
-          'x-amz-server-side-encryption',
-          'x-amz-request-id',
-          'x-amz-id-2',
-          'Content-Type',
-          'Content-Length'
-        ],
-      }],
-      lifecycleRules: [
-        {
-          expiration: Duration.days(30),
-          prefix: 'raw/',
-        }
-      ],
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true
-    });
-
     const rawVideosBucket = new s3.Bucket(this, 'RawVideosBucket', {
       bucketName: `dubstudio-raw-videos-${accountId}-${env}`,
       versioned: false,
@@ -97,14 +59,14 @@ export class InfrastructureStack extends cdk.Stack {
         {
           expiration: Duration.days(1),
           prefix: 'uploads/',
-          abortIncompleteMultipartUploadAfter: Duration.hours(24), 
+          abortIncompleteMultipartUploadAfter: Duration.hours(24),
         }
       ],
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development, change to RETAIN for production
-      autoDeleteObjects: true, // For development, remove for production
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true
     });
 
     const processedVideosBucket = new s3.Bucket(this, 'ProcessedVideosBucket', {
@@ -273,8 +235,8 @@ export class InfrastructureStack extends cdk.Stack {
     const subtitleHandler = new lambda.Function(this, 'SubtitleFunction', {
       runtime: lambda.Runtime.PYTHON_3_9,
       architecture: lambda.Architecture.ARM_64,
-      code: lambda.Code.fromAsset('lambda/src'),
-      handler: 'handlers/videos/subtitle.handler',
+      code: lambda.Code.fromAsset('lambda'),
+      handler: 'src/handlers/videos/subtitle.handler',
       layers: [processingLayer],
       timeout: cdk.Duration.minutes(15),
       memorySize: 1024,
@@ -290,8 +252,8 @@ export class InfrastructureStack extends cdk.Stack {
     const dubbingHandler = new lambda.Function(this, 'DubbingFunction', {
       runtime: lambda.Runtime.PYTHON_3_9,
       architecture: lambda.Architecture.ARM_64,
-      code: lambda.Code.fromAsset('lambda/src'),
-      handler: 'handlers/videos/dubbing.handler',
+      code: lambda.Code.fromAsset('lambda'),
+      handler: 'src/handlers/videos/dubbing.handler',
       layers: [processingLayer],
       timeout: cdk.Duration.minutes(15),
       memorySize: 1024,
@@ -314,20 +276,20 @@ export class InfrastructureStack extends cdk.Stack {
 
     const videoUploadHandler = new lambda.Function(this, 'VideoUploadFunction', {
       ...commonLambdaConfig,
-      code: lambda.Code.fromAsset('lambda/src'),
-      handler: 'handlers/videos/upload.handler',
+      code: lambda.Code.fromAsset('lambda'),
+      handler: 'src/handlers/videos/upload.handler',
     });
 
     const videoStatusHandler = new lambda.Function(this, 'VideoStatusFunction', {
       ...commonLambdaConfig,
-      code: lambda.Code.fromAsset('lambda/src'),
-      handler: 'handlers/videos/status.handler',
+      code: lambda.Code.fromAsset('lambda'),
+      handler: 'src/handlers/videos/status.handler',
     });
 
     const videoProcessHandler = new lambda.Function(this, 'VideoProcessFunction', {
       ...commonLambdaConfig,
-      code: lambda.Code.fromAsset('lambda/src'),
-      handler: 'handlers/videos/process.handler',
+      code: lambda.Code.fromAsset('lambda'),
+      handler: 'src/handlers/videos/process.handler',
       environment: {
         ...commonLambdaConfig.environment,
         SUBTITLE_FUNCTION: subtitleHandler.functionName,
@@ -385,7 +347,7 @@ export class InfrastructureStack extends cdk.Stack {
     videosTable.grantWriteData(videoUploadHandler);
 
     // Add CORS rule for uploads
-    bucket.addCorsRule({
+    rawVideosBucket.addCorsRule({
       allowedMethods: [
         s3.HttpMethods.PUT,
         s3.HttpMethods.POST,
