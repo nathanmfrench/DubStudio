@@ -64,19 +64,23 @@ export class InfrastructureStack extends cdk.Stack {
       enforceSSL: true
     });
 
-    const rawBucket = new s3.Bucket(this, 'RawVideosBucket', {
+    const rawVideosBucket = new s3.Bucket(this, 'RawVideosBucket', {
       bucketName: `dubstudio-raw-videos-${accountId}-${env}`,
+      versioned: false,
       cors: [{
         allowedMethods: [
           s3.HttpMethods.GET,
           s3.HttpMethods.PUT,
           s3.HttpMethods.POST,
+          s3.HttpMethods.DELETE,
         ],
         allowedOrigins: [
           'http://localhost:19000',
           'http://localhost:19001',
           'exp://localhost:19000',
           'exp://localhost:19001',
+          'https://dubstudio.voxium.tech',
+          'dubstudio://*'
         ],
         allowedHeaders: ['*'],
         exposedHeaders: [
@@ -87,33 +91,39 @@ export class InfrastructureStack extends cdk.Stack {
           'Content-Type',
           'Content-Length'
         ],
+        maxAge: 3600
       }],
       lifecycleRules: [
         {
-          expiration: Duration.days(30),
-          prefix: 'raw/',
-          abortIncompleteMultipartUploadAfter: Duration.days(1),
+          expiration: Duration.days(1),
+          prefix: 'uploads/',
+          abortIncompleteMultipartUploadAfter: Duration.hours(24), 
         }
       ],
-      versioned: false,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development, change to RETAIN for production
+      autoDeleteObjects: true, // For development, remove for production
     });
 
-    const processedBucket = new s3.Bucket(this, 'ProcessedVideosBucket', {
+    const processedVideosBucket = new s3.Bucket(this, 'ProcessedVideosBucket', {
       bucketName: `dubstudio-processed-videos-${accountId}-${env}`,
+      versioned: false,
       cors: [{
         allowedMethods: [
           s3.HttpMethods.GET,
           s3.HttpMethods.PUT,
           s3.HttpMethods.POST,
+          s3.HttpMethods.DELETE,
         ],
         allowedOrigins: [
           'http://localhost:19000',
           'http://localhost:19001',
           'exp://localhost:19000',
           'exp://localhost:19001',
+          'https://dubstudio.voxium.tech',
+          'dubstudio://*'
         ],
         allowedHeaders: ['*'],
         exposedHeaders: [
@@ -124,14 +134,23 @@ export class InfrastructureStack extends cdk.Stack {
           'Content-Type',
           'Content-Length'
         ],
+        maxAge: 3600
       }],
-      lifecycleRules: [{
-        expiration: Duration.days(30),
-        prefix: 'videos/'
-      }],
+      lifecycleRules: [
+        {
+          expiration: Duration.days(2),
+          prefix: 'subtitled/',
+        },
+        {
+          expiration: Duration.days(2),
+          prefix: 'dubbed/',
+        }
+      ],
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development, change to RETAIN for production
+      autoDeleteObjects: true, // For development, remove for production
     });
 
     // Create DynamoDB table for videos
@@ -143,22 +162,55 @@ export class InfrastructureStack extends cdk.Stack {
       timeToLiveAttribute: 'ttl', // Optional: for cleanup of old records
     });
 
+    // Create DynamoDB table for jobs
+    const jobsTable = new dynamodb.Table(this, 'DubStudioJobsTable', {
+      tableName: `dubstudio-jobs-${accountId}-${env}`,
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'jobId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development
+      timeToLiveAttribute: 'ttl',
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES // Enable streams for status tracking
+    });
+
+    // Add GSI for status queries
+    jobsTable.addGlobalSecondaryIndex({
+      indexName: 'status-index',
+      partitionKey: { name: 'status', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.NUMBER },
+      projectionType: dynamodb.ProjectionType.ALL
+    });
+
+    // Add GSI for user's jobs by creation time
+    jobsTable.addGlobalSecondaryIndex({
+      indexName: 'user-jobs-index',
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.NUMBER },
+      projectionType: dynamodb.ProjectionType.ALL
+    });
+
+    // Output the jobs table name
+    new cdk.CfnOutput(this, 'JobsTableName', {
+      value: jobsTable.tableName,
+      description: 'Name of the jobs table'
+    });
+
     // Create Cognito User Pool
     const userPool = new cognito.UserPool(this, 'DubStudioUserPool', {
-      userPoolName: 'DubStudioUsers',
+      userPoolName: 'DubStudioUserPool',
       signInAliases: {
         username: false,
         email: true
       },
-      autoVerify: { email: true },
+      autoVerify: { 
+        email: true,
+        phone: true 
+      },
       standardAttributes: {
-        email: { required: true, mutable: false }
+        email: { required: true, mutable: true },
+        phoneNumber: { required: false, mutable: true }
       },
       selfSignUpEnabled: true,
-      customAttributes: {
-        tier: new cognito.StringAttribute({ mutable: true }),
-        credits: new cognito.NumberAttribute({ mutable: true }),
-      },
       passwordPolicy: {
         minLength: 8,
         requireLowercase: true,
@@ -166,8 +218,8 @@ export class InfrastructureStack extends cdk.Stack {
         requireDigits: true,
         requireSymbols: true,
       },
-      accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
-      removalPolicy: cdk.RemovalPolicy.RETAIN
+      accountRecovery: cognito.AccountRecovery.EMAIL_AND_PHONE_WITHOUT_MFA,
+      removalPolicy: cdk.RemovalPolicy.DESTROY // Change to RETAIN for production
     });
 
     // Create Cognito User Pool Client
@@ -175,28 +227,16 @@ export class InfrastructureStack extends cdk.Stack {
       userPool,
       authFlows: {
         userSrp: true,
+        userPassword: true,
         adminUserPassword: false,
-        custom: false,
-        userPassword: false
+        custom: false
       },
       preventUserExistenceErrors: true,
       generateSecret: false,
-      readAttributes: new cognito.ClientAttributes()
-        .withStandardAttributes({
-          email: true,
-          emailVerified: true,
-          phoneNumber: true,
-          phoneNumberVerified: true,
-          preferredUsername: true
-        })
-        .withCustomAttributes('tier', 'credits'),
-      writeAttributes: new cognito.ClientAttributes()
-        .withStandardAttributes({
-          email: true,
-          phoneNumber: true,
-          preferredUsername: true
-        })
-        .withCustomAttributes('tier', 'credits')
+      refreshTokenValidity: Duration.days(30),
+      accessTokenValidity: Duration.minutes(60),
+      idTokenValidity: Duration.minutes(60),
+      enableTokenRevocation: true
     });
 
     const dubbywubbyLogGroup = new logs.LogGroup(this, 'DubbyWubbyLogGroup', {
@@ -211,8 +251,10 @@ export class InfrastructureStack extends cdk.Stack {
       logGroup: dubbywubbyLogGroup,
       environment: {
         NODE_ENV: 'production',
-        BUCKET_NAME: bucket.bucketName,
-        LOG_LEVEL: 'DEBUG'  // Enable detailed logging
+        RAW_VIDEOS_BUCKET: rawVideosBucket.bucketName,
+        PROCESSED_VIDEOS_BUCKET: processedVideosBucket.bucketName,
+        JOBS_TABLE: jobsTable.tableName,
+        LOG_LEVEL: 'DEBUG'
       },
       bundling: {
         minify: true,
@@ -220,92 +262,96 @@ export class InfrastructureStack extends cdk.Stack {
       },
     };
 
-    // Create Lambda functions
-    const videoUploadHandler = new lambda.Function(this, 'DubStudioVideoUploadHandler', {
-      ...commonLambdaConfig,
-      handler: 'videos/upload.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/dist')), // Changed to "dist"
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 256,
-      environment: {
-        ...commonLambdaConfig.environment,
-        VIDEOS_TABLE_NAME: videosTable.tableName,
-      },
-    });
-    
-    const videoStatusHandler = new lambda.Function(this, 'DubStudioVideoStatusHandler', {
-      ...commonLambdaConfig,
-      handler: 'videos/status.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/dist')),
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 256,
-      environment: {
-        ...commonLambdaConfig.environment,
-        VIDEOS_TABLE_NAME: videosTable.tableName,
-      },
-    });
-
-    // Create Python dubbing handler with layer for dependencies
-    const dubbingLayer = new lambda.LayerVersion(this, 'DubStudioDubbingLayer', {
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/python'), {
-        bundling: {
-          image: lambda.Runtime.PYTHON_3_9.bundlingImage,
-          command: [
-            'bash', '-c',
-            'mkdir -p /asset-output/python/lib/python3.9/site-packages && pip install -r requirements.txt -t /asset-output/python/lib/python3.9/site-packages/'
-          ],
-        }
-      }),
+    // Create Python Lambda layer for subtitle and dubbing
+    const processingLayer = new lambda.LayerVersion(this, 'ProcessingLayer', {
+      code: lambda.Code.fromAsset('lambda/layers/processing'),
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_9],
-      description: 'Dependencies for dubbing handler',
+      description: 'Layer containing dependencies for video processing'
     });
 
-    const videoDubbingHandler = new lambda.Function(this, 'DubStudioVideoDubbingHandler', {
+    // Create Lambda functions
+    const subtitleHandler = new lambda.Function(this, 'SubtitleFunction', {
       runtime: lambda.Runtime.PYTHON_3_9,
-      handler: 'dubbing.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/python')),
-      layers: [dubbingLayer],
+      architecture: lambda.Architecture.ARM_64,
+      code: lambda.Code.fromAsset('lambda/src'),
+      handler: 'handlers/videos/subtitle.handler',
+      layers: [processingLayer],
       timeout: cdk.Duration.minutes(15),
       memorySize: 1024,
       environment: {
-        VIDEOS_TABLE_NAME: videosTable.tableName,
-        BUCKET_NAME: bucket.bucketName,
-        ELEVENLABS_SECRET_NAME: elevenLabsSecret.secretName,
+        NODE_ENV: 'production',
+        RAW_VIDEOS_BUCKET: rawVideosBucket.bucketName,
+        PROCESSED_VIDEOS_BUCKET: processedVideosBucket.bucketName,
+        JOBS_TABLE: jobsTable.tableName,
+        LOG_LEVEL: 'DEBUG'
       },
     });
 
-    // 1. Define subtitle handler FIRST
-    const subtitleHandler = new lambda.Function(this, 'DubStudioSubtitleHandler', {
+    const dubbingHandler = new lambda.Function(this, 'DubbingFunction', {
       runtime: lambda.Runtime.PYTHON_3_9,
-      handler: 'subtitles.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/python')),
-      layers: [dubbingLayer],
+      architecture: lambda.Architecture.ARM_64,
+      code: lambda.Code.fromAsset('lambda/src'),
+      handler: 'handlers/videos/dubbing.handler',
+      layers: [processingLayer],
       timeout: cdk.Duration.minutes(15),
-      memorySize: 3008,
+      memorySize: 1024,
       environment: {
-        VIDEOS_TABLE_NAME: videosTable.tableName,
-        BUCKET_NAME: bucket.bucketName, 
+        NODE_ENV: 'production',
+        RAW_VIDEOS_BUCKET: rawVideosBucket.bucketName,
+        PROCESSED_VIDEOS_BUCKET: processedVideosBucket.bucketName,
+        JOBS_TABLE: jobsTable.tableName,
+        LOG_LEVEL: 'DEBUG',
+        ELEVENLABS_SECRET_NAME: 'ELEVENLABS_API_KEY'
       },
     });
 
-    // 2. THEN define process handler
-    const videoProcessHandler = new lambda.Function(this, 'DubStudioVideoProcessHandler', {
+    // Grant the dubbing handler permission to read the secret
+    dubbingHandler.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['secretsmanager:GetSecretValue'],
+      resources: [elevenLabsSecret.secretArn]
+    }));
+
+    const videoUploadHandler = new lambda.Function(this, 'VideoUploadFunction', {
       ...commonLambdaConfig,
-      handler: 'dist/videos/process.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda')),
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 256,
+      code: lambda.Code.fromAsset('lambda/src'),
+      handler: 'handlers/videos/upload.handler',
+    });
+
+    const videoStatusHandler = new lambda.Function(this, 'VideoStatusFunction', {
+      ...commonLambdaConfig,
+      code: lambda.Code.fromAsset('lambda/src'),
+      handler: 'handlers/videos/status.handler',
+    });
+
+    const videoProcessHandler = new lambda.Function(this, 'VideoProcessFunction', {
+      ...commonLambdaConfig,
+      code: lambda.Code.fromAsset('lambda/src'),
+      handler: 'handlers/videos/process.handler',
       environment: {
         ...commonLambdaConfig.environment,
-        VIDEOS_TABLE_NAME: videosTable.tableName,
-        DUBBING_FUNCTION_NAME: videoDubbingHandler.functionName,
-        SUBTITLE_FUNCTION_NAME: subtitleHandler.functionName
+        SUBTITLE_FUNCTION: subtitleHandler.functionName,
+        DUBBING_FUNCTION: dubbingHandler.functionName,
       },
     });
 
-    // 3. Add invocation permission
-    videoDubbingHandler.grantInvoke(videoProcessHandler);
-    subtitleHandler.grantInvoke(videoProcessHandler) // ✅ Allows process to trigger subtitle
+    // Grant Lambda functions access to jobs table
+    jobsTable.grantReadWriteData(videoUploadHandler);
+    jobsTable.grantReadWriteData(videoProcessHandler);
+    jobsTable.grantReadWriteData(videoStatusHandler);
+    jobsTable.grantReadData(subtitleHandler);
+    jobsTable.grantReadData(dubbingHandler);
+
+    // Grant S3 permissions
+    rawVideosBucket.grantRead(subtitleHandler);
+    rawVideosBucket.grantRead(dubbingHandler);
+    processedVideosBucket.grantWrite(subtitleHandler);
+    processedVideosBucket.grantWrite(dubbingHandler);
+
+    // Grant Lambda invoke permissions
+    subtitleHandler.grantInvoke(videoProcessHandler);
+    dubbingHandler.grantInvoke(videoProcessHandler);
+
     // Grant necessary permissions for the upload handler
     videoUploadHandler.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
@@ -316,13 +362,13 @@ export class InfrastructureStack extends cdk.Stack {
         's3:GetObjectAcl'
       ],
       resources: [
-        bucket.arnForObjects('uploads/*')
+        rawVideosBucket.arnForObjects('uploads/*')
       ]
     }));
 
     // Add bucket policy to allow presigned URL uploads
     const bucketPolicy = new s3.BucketPolicy(this, 'AllowPresignedUrlUploads', {
-      bucket: bucket
+      bucket: rawVideosBucket
     });
 
     bucketPolicy.document.addStatements(new iam.PolicyStatement({
@@ -332,7 +378,7 @@ export class InfrastructureStack extends cdk.Stack {
         's3:PutObject',
         's3:GetObject'
       ],
-      resources: [bucket.arnForObjects('uploads/*')]
+      resources: [rawVideosBucket.arnForObjects('uploads/*')]
     }));
 
     // Grant DynamoDB permissions
@@ -367,12 +413,12 @@ export class InfrastructureStack extends cdk.Stack {
 
     videoProcessHandler.addToRolePolicy(new iam.PolicyStatement({
       actions: ['s3:GetObject', 's3:DeleteObject'],
-      resources: [rawBucket.arnForObjects('uploads/*')]
+      resources: [rawVideosBucket.arnForObjects('uploads/*')]
     }));
 
     videoProcessHandler.addToRolePolicy(new iam.PolicyStatement({
       actions: ['s3:PutObject'],
-      resources: [processedBucket.arnForObjects('videos/*')]
+      resources: [processedVideosBucket.arnForObjects('subtitled/*')]
     }));
 
     videoUploadHandler.addToRolePolicy(new iam.PolicyStatement({
@@ -406,66 +452,18 @@ export class InfrastructureStack extends cdk.Stack {
       }
     });
 
-    // Create Cognito Identity Pool
-    const identityPool = new cognito.CfnIdentityPool(this, 'DubStudioIdentityPool', {
-      allowUnauthenticatedIdentities: false,
-      cognitoIdentityProviders: [{
-        clientId: userPoolClient.userPoolClientId,
-        providerName: userPool.userPoolProviderName,
-        serverSideTokenCheck: true
-      }]
-    });
-
-    // Create roles for authenticated users
-    const authenticatedRole = new iam.Role(this, 'CognitoAuthenticatedRole', {
-      assumedBy: new iam.FederatedPrincipal('cognito-identity.amazonaws.com', {
-        StringEquals: {
-          'cognito-identity.amazonaws.com:aud': identityPool.ref
-        },
-        'ForAnyValue:StringLike': {
-          'cognito-identity.amazonaws.com:amr': 'authenticated'
-        }
-      }, 'sts:AssumeRoleWithWebIdentity')
-    });
-
-    // Add permissions for authenticated users
-    authenticatedRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'execute-api:Invoke'
-      ],
-      resources: [
-        `arn:aws:execute-api:${this.region}:${this.account}:${api.restApiId}/*`
-      ]
-    }));
-
-    // Attach roles to identity pool
-    new cognito.CfnIdentityPoolRoleAttachment(this, 'IdentityPoolRoleAttachment', {
-      identityPoolId: identityPool.ref,
-      roles: {
-        authenticated: authenticatedRole.roleArn
-      }
-    });
-
-    // Output identity pool ID
-    new cdk.CfnOutput(this, 'IdentityPoolId', {
-      value: identityPool.ref,
-      description: 'ID of the Cognito Identity Pool'
-    });
-
     // Create Cognito authorizer
     const apiAuthorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'DubStudioApiAuthorizer', {
-      cognitoUserPools: [userPool],
-      identitySource: 'method.request.header.Authorization'
+      cognitoUserPools: [userPool]
     });
 
-    // Update API Gateway authorizer options
+    // Default method options with Cognito authorizer
     const defaultMethodOptions: apigateway.MethodOptions = {
       authorizer: apiAuthorizer,
-      authorizationType: apigateway.AuthorizationType.COGNITO
+      authorizationType: apigateway.AuthorizationType.COGNITO,
     };
 
-    // Create API resources and methods with updated scopes
+    // Create API resources and methods
     const apiV1 = api.root.addResource('v1');
     const apiVideos = apiV1.addResource('videos');
     const apiVideoId = apiVideos.addResource('{videoId}');
@@ -491,27 +489,7 @@ export class InfrastructureStack extends cdk.Stack {
       defaultMethodOptions
     );
 
-    // After creating the authorizer
-    console.log('Cognito Authorizer ID:', apiAuthorizer.authorizerId);
-
-    // When adding methods
-    console.log(`Configuring POST /v1/videos with auth:`, {
-      authType: 'COGNITO', 
-      authorizerId: apiAuthorizer.authorizerId,
-      userPoolArn: userPool.userPoolArn
-    });
-
     // Output important values
-    new cdk.CfnOutput(this, 'DubStudioUserPoolId', {
-      value: userPool.userPoolId,
-      description: 'The ID of the Cognito User Pool',
-    });
-
-    new cdk.CfnOutput(this, 'DubStudioUserPoolClientId', {
-      value: userPoolClient.userPoolClientId,
-      description: 'The ID of the Cognito User Pool Client',
-    });
-
     new cdk.CfnOutput(this, 'DubStudioApiUrl', {
       value: api.url,
       description: 'The URL of the API Gateway',
@@ -520,6 +498,17 @@ export class InfrastructureStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'DubStudioRegion', {
       value: this.region,
       description: 'The AWS Region',
+    });
+
+    // Add outputs for the frontend
+    new cdk.CfnOutput(this, 'RawVideosBucketName', {
+      value: rawVideosBucket.bucketName,
+      description: 'Name of the raw videos bucket'
+    });
+
+    new cdk.CfnOutput(this, 'ProcessedVideosBucketName', {
+      value: processedVideosBucket.bucketName,
+      description: 'Name of the processed videos bucket'
     });
 
   }

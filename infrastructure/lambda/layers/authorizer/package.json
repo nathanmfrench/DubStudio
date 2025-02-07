@@ -1,0 +1,8 @@
+{
+  "name": "authorizer-layer",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "aws-jwt-verify": "^5.0.0"
+  }
+} 

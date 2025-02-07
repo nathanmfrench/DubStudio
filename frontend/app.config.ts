@@ -121,6 +121,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ]
     },
     plugins: [
+      'expo-router',
+      [
+        'expo-build-properties',
+        {
+          ios: {
+            deploymentTarget: '13.0',
+          },
+          android: {
+            compileSdkVersion: 33,
+            targetSdkVersion: 33,
+            buildToolsVersion: '33.0.0',
+          },
+        },
+      ],
       [
         'expo-image-picker',
         {
@@ -155,6 +169,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       EXPO_PUBLIC_INSTAGRAM_CLIENT_ID: process.env.EXPO_PUBLIC_INSTAGRAM_CLIENT_ID,
       EXPO_PUBLIC_INSTAGRAM_CLIENT_SECRET: process.env.EXPO_PUBLIC_INSTAGRAM_CLIENT_SECRET,
       EXPO_PUBLIC_INSTAGRAM_REDIRECT_URI: process.env.EXPO_PUBLIC_INSTAGRAM_REDIRECT_URI,
+      EXPO_PUBLIC_AUTH_DOMAIN: process.env.EXPO_PUBLIC_AUTH_DOMAIN,
+      EXPO_PUBLIC_OAUTH_REDIRECT_SIGNIN: process.env.EXPO_PUBLIC_OAUTH_REDIRECT_SIGNIN,
+      EXPO_PUBLIC_OAUTH_REDIRECT_SIGNOUT: process.env.EXPO_PUBLIC_OAUTH_REDIRECT_SIGNOUT,
       eas: {
         projectId: 'a3a24494-5f90-4ec5-8609-cd7eecfe29b3'
       },
