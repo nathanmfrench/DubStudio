@@ -279,7 +279,32 @@ export class InfrastructureStack extends cdk.Stack {
       code: lambda.Code.fromAsset('lambda', {
         bundling: {
           image: lambda.Runtime.NODEJS_18_X.bundlingImage,
-          command: ['cp', '-r', '.', '/asset-output/']
+          command: [
+            'bash', '-c', [
+              // Setup temp directory with all necessary files
+              'mkdir -p /tmp/npm',
+              'cp -r /asset-input/* /tmp/npm/',  // Copy all files to temp
+              
+              // Install dependencies in temp directory
+              'cd /tmp/npm',
+              'npm install',
+              
+              // Run TypeScript compilation in temp directory
+              '/tmp/npm/node_modules/.bin/tsc',
+              
+              // Copy output to asset-output
+              'cp -r dist/* /asset-output/',
+              'cp package.json /asset-output/',
+              
+              // Install production dependencies in output
+              'cd /asset-output',
+              'npm install --production',
+              'chown -R 502:20 /asset-output/*'
+            ].join(' && ')
+          ],
+          environment: {
+            HOME: '/tmp'
+          }
         }
       }),
       handler: 'dist/handlers/videos/upload.handler',
@@ -290,7 +315,17 @@ export class InfrastructureStack extends cdk.Stack {
       code: lambda.Code.fromAsset('lambda', {
         bundling: {
           image: lambda.Runtime.NODEJS_18_X.bundlingImage,
-          command: ['cp', '-r', '.', '/asset-output/']
+          command: [
+            'bash', '-c', [
+              'cd /asset-input',
+              'npm install',
+              'npm run build',
+              'cp -r dist/* /asset-output/',
+              'cp package.json /asset-output/',
+              'cd /asset-output',
+              'npm install --production'
+            ].join(' && ')
+          ]
         }
       }),
       handler: 'dist/handlers/videos/status.handler',
@@ -301,7 +336,17 @@ export class InfrastructureStack extends cdk.Stack {
       code: lambda.Code.fromAsset('lambda', {
         bundling: {
           image: lambda.Runtime.NODEJS_18_X.bundlingImage,
-          command: ['cp', '-r', '.', '/asset-output/']
+          command: [
+            'bash', '-c', [
+              'cd /asset-input',
+              'npm install',
+              'npm run build',
+              'cp -r dist/* /asset-output/',
+              'cp package.json /asset-output/',
+              'cd /asset-output',
+              'npm install --production'
+            ].join(' && ')
+          ]
         }
       }),
       handler: 'dist/handlers/videos/process.handler',
