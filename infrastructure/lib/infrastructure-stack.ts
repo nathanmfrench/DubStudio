@@ -10,7 +10,6 @@ import * as path from 'path';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Duration } from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import { truncate } from 'fs/promises';
 
 export class InfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -111,8 +110,8 @@ export class InfrastructureStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development, change to RETAIN for production
-      autoDeleteObjects: true, // For development, remove for production
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true
     });
 
     // Create DynamoDB table for videos
@@ -120,8 +119,8 @@ export class InfrastructureStack extends cdk.Stack {
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'videoId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development only
-      timeToLiveAttribute: 'ttl', // Optional: for cleanup of old records
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      timeToLiveAttribute: 'ttl',
     });
 
     // Create DynamoDB table for jobs
@@ -130,9 +129,9 @@ export class InfrastructureStack extends cdk.Stack {
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'jobId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
       timeToLiveAttribute: 'ttl',
-      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES // Enable streams for status tracking
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES
     });
 
     // Add GSI for status queries
@@ -149,12 +148,6 @@ export class InfrastructureStack extends cdk.Stack {
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'createdAt', type: dynamodb.AttributeType.NUMBER },
       projectionType: dynamodb.ProjectionType.ALL
-    });
-
-    // Output the jobs table name
-    new cdk.CfnOutput(this, 'JobsTableName', {
-      value: jobsTable.tableName,
-      description: 'Name of the jobs table'
     });
 
     // Create Cognito User Pool
@@ -181,7 +174,7 @@ export class InfrastructureStack extends cdk.Stack {
         requireSymbols: true,
       },
       accountRecovery: cognito.AccountRecovery.EMAIL_AND_PHONE_WITHOUT_MFA,
-      removalPolicy: cdk.RemovalPolicy.DESTROY // Change to RETAIN for production
+      removalPolicy: cdk.RemovalPolicy.DESTROY
     });
 
     // Create Cognito User Pool Client
@@ -203,7 +196,7 @@ export class InfrastructureStack extends cdk.Stack {
 
     const dubbywubbyLogGroup = new logs.LogGroup(this, 'DubbyWubbyLogGroup', {
       retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY // Optional: auto-delete logs on stack deletion
+      removalPolicy: cdk.RemovalPolicy.DESTROY
     });
    
     // Common Lambda configuration
@@ -218,11 +211,7 @@ export class InfrastructureStack extends cdk.Stack {
         PROCESSED_VIDEOS_BUCKET: processedVideosBucket.bucketName,
         JOBS_TABLE: jobsTable.tableName,
         LOG_LEVEL: 'DEBUG'
-      },
-      bundling: {
-        minify: true,
-        sourceMap: true,
-      },
+      }
     };
 
     // Create Python Lambda layer for subtitle and dubbing
@@ -236,7 +225,12 @@ export class InfrastructureStack extends cdk.Stack {
     const subtitleHandler = new lambda.Function(this, 'SubtitleFunction', {
       runtime: lambda.Runtime.PYTHON_3_9,
       architecture: lambda.Architecture.ARM_64,
-      code: lambda.Code.fromAsset('lambda'),
+      code: lambda.Code.fromAsset('lambda', {
+        bundling: {
+          image: lambda.Runtime.NODEJS_18_X.bundlingImage,
+          command: ['cp', '-r', '.', '/asset-output/']
+        }
+      }),
       handler: 'dist/handlers/videos/subtitle.handler',
       layers: [processingLayer],
       timeout: cdk.Duration.minutes(15),
@@ -253,7 +247,12 @@ export class InfrastructureStack extends cdk.Stack {
     const dubbingHandler = new lambda.Function(this, 'DubbingFunction', {
       runtime: lambda.Runtime.PYTHON_3_9,
       architecture: lambda.Architecture.ARM_64,
-      code: lambda.Code.fromAsset('lambda'),
+      code: lambda.Code.fromAsset('lambda', {
+        bundling: {
+          image: lambda.Runtime.NODEJS_18_X.bundlingImage,
+          command: ['cp', '-r', '.', '/asset-output/']
+        }
+      }),
       handler: 'dist/handlers/videos/dubbing.handler',
       layers: [processingLayer],
       timeout: cdk.Duration.minutes(15),
@@ -277,19 +276,34 @@ export class InfrastructureStack extends cdk.Stack {
 
     const videoUploadHandler = new lambda.Function(this, 'VideoUploadFunction', {
       ...commonLambdaConfig,
-      code: lambda.Code.fromAsset('lambda'),
+      code: lambda.Code.fromAsset('lambda', {
+        bundling: {
+          image: lambda.Runtime.NODEJS_18_X.bundlingImage,
+          command: ['cp', '-r', '.', '/asset-output/']
+        }
+      }),
       handler: 'dist/handlers/videos/upload.handler',
     });
 
     const videoStatusHandler = new lambda.Function(this, 'VideoStatusFunction', {
       ...commonLambdaConfig,
-      code: lambda.Code.fromAsset('lambda'),
+      code: lambda.Code.fromAsset('lambda', {
+        bundling: {
+          image: lambda.Runtime.NODEJS_18_X.bundlingImage,
+          command: ['cp', '-r', '.', '/asset-output/']
+        }
+      }),
       handler: 'dist/handlers/videos/status.handler',
     });
 
     const videoProcessHandler = new lambda.Function(this, 'VideoProcessFunction', {
       ...commonLambdaConfig,
-      code: lambda.Code.fromAsset('lambda'),
+      code: lambda.Code.fromAsset('lambda', {
+        bundling: {
+          image: lambda.Runtime.NODEJS_18_X.bundlingImage,
+          command: ['cp', '-r', '.', '/asset-output/']
+        }
+      }),
       handler: 'dist/handlers/videos/process.handler',
       environment: {
         ...commonLambdaConfig.environment,
@@ -467,7 +481,6 @@ export class InfrastructureStack extends cdk.Stack {
       description: 'The AWS Region',
     });
 
-    // Add outputs for the frontend
     new cdk.CfnOutput(this, 'RawVideosBucketName', {
       value: rawVideosBucket.bucketName,
       description: 'Name of the raw videos bucket'
@@ -477,7 +490,5 @@ export class InfrastructureStack extends cdk.Stack {
       value: processedVideosBucket.bucketName,
       description: 'Name of the processed videos bucket'
     });
-
   }
 } 
-
