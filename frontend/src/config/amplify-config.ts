@@ -15,7 +15,6 @@ export const configureAmplify = () => {
       Cognito: {
         userPoolId: expoConfig.EXPO_PUBLIC_AWS_USER_POOL_ID,
         userPoolClientId: expoConfig.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID,
-        identityPoolId: expoConfig.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID,
         loginWith: {
           email: true,
           phone: false,

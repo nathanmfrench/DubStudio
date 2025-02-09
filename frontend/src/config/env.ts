@@ -15,7 +15,6 @@ export interface Config {
     region: string;
     userPoolId: string;
     userPoolClientId: string;
-    identityPoolId: string;
   };
   instagram: {
     clientId: string;
@@ -55,7 +54,6 @@ const getConfig = (): Config => {
     region: 'us-east-1',
     userPoolId: 'us-east-1_Sv5SbRCAV',
     userPoolClientId: '7kteo366fu3jrda6oi462mc258',
-    identityPoolId: 'us-east-1:335ded2f-915b-4d7e-9c51-369e29c706cd',
     apiUrl: 'https://yajlya1xkl.execute-api.us-east-1.amazonaws.com/prod'
   };
 
@@ -69,7 +67,6 @@ const getConfig = (): Config => {
     region: expoConfig.EXPO_PUBLIC_AWS_REGION || process.env.EXPO_PUBLIC_AWS_REGION || devConfig.region,
     userPoolId: expoConfig.EXPO_PUBLIC_AWS_USER_POOL_ID || process.env.EXPO_PUBLIC_AWS_USER_POOL_ID || devConfig.userPoolId,
     userPoolClientId: expoConfig.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID || process.env.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID || devConfig.userPoolClientId,
-    identityPoolId: expoConfig.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID || process.env.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID || devConfig.identityPoolId
   };
 
   console.log('Extracted AWS config:', awsConfig);

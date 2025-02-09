@@ -25,7 +25,6 @@ console.log('Raw env variables after loading:', {
   region: process.env.EXPO_PUBLIC_AWS_REGION,
   userPoolId: process.env.EXPO_PUBLIC_AWS_USER_POOL_ID,
   userPoolClientId: process.env.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID,
-  identityPoolId: process.env.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID,
   apiUrl: process.env.EXPO_PUBLIC_API_URL
 });
 
@@ -34,7 +33,6 @@ const requiredEnvVars = [
   'EXPO_PUBLIC_AWS_REGION',
   'EXPO_PUBLIC_AWS_USER_POOL_ID',
   'EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID',
-  'EXPO_PUBLIC_AWS_IDENTITY_POOL_ID',
   'EXPO_PUBLIC_API_URL'
 ];
 
@@ -55,7 +53,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     region: process.env.EXPO_PUBLIC_AWS_REGION,
     poolId: process.env.EXPO_PUBLIC_AWS_USER_POOL_ID,
     clientId: process.env.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID,
-    identityPoolId: process.env.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID
   });
 
   return {
@@ -165,7 +162,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       EXPO_PUBLIC_AWS_REGION: process.env.EXPO_PUBLIC_AWS_REGION,
       EXPO_PUBLIC_AWS_USER_POOL_ID: process.env.EXPO_PUBLIC_AWS_USER_POOL_ID,
       EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID: process.env.EXPO_PUBLIC_AWS_USER_POOL_CLIENT_ID,
-      EXPO_PUBLIC_AWS_IDENTITY_POOL_ID: process.env.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID,
       EXPO_PUBLIC_INSTAGRAM_CLIENT_ID: process.env.EXPO_PUBLIC_INSTAGRAM_CLIENT_ID,
       EXPO_PUBLIC_INSTAGRAM_CLIENT_SECRET: process.env.EXPO_PUBLIC_INSTAGRAM_CLIENT_SECRET,
       EXPO_PUBLIC_INSTAGRAM_REDIRECT_URI: process.env.EXPO_PUBLIC_INSTAGRAM_REDIRECT_URI,
