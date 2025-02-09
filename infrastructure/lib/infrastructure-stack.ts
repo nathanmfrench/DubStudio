@@ -268,7 +268,7 @@ export class InfrastructureStack extends cdk.Stack {
           command: ['cp', '-r', '.', '/asset-output/']
         }
       }),
-      handler: 'dist/handlers/videos/subtitle.handler',
+      handler: 'handlers/videos/subtitle.handler',
       layers: [processingLayer],
       timeout: cdk.Duration.minutes(15),
       memorySize: 1024,
@@ -290,7 +290,7 @@ export class InfrastructureStack extends cdk.Stack {
           command: ['cp', '-r', '.', '/asset-output/']
         }
       }),
-      handler: 'dist/handlers/videos/dubbing.handler',
+      handler: 'handlers/videos/dubbing.handler',
       layers: [processingLayer],
       timeout: cdk.Duration.minutes(15),
       memorySize: 1024,
@@ -344,7 +344,7 @@ export class InfrastructureStack extends cdk.Stack {
           }
         }
       }),
-      handler: 'dist/handlers/videos/upload.handler',
+      handler: 'handlers/videos/upload.handler',
     });
 
     const videoStatusHandler = new lambda.Function(this, 'VideoStatusFunction', {
@@ -368,7 +368,7 @@ export class InfrastructureStack extends cdk.Stack {
           }
         }
       }),
-      handler: 'dist/handlers/videos/status.handler',
+      handler: 'handlers/videos/status.handler',
     });
 
     const videoProcessHandler = new lambda.Function(this, 'VideoProcessFunction', {
@@ -392,7 +392,7 @@ export class InfrastructureStack extends cdk.Stack {
           }
         }
       }),
-      handler: 'dist/handlers/videos/process.handler',
+      handler: 'handlers/videos/process.handler',
       environment: {
         ...commonLambdaConfig.environment,
         SUBTITLE_FUNCTION: subtitleHandler.functionName,
