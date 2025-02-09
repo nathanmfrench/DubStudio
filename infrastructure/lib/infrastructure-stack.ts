@@ -16,7 +16,7 @@ export class InfrastructureStack extends cdk.Stack {
     super(scope, id, props);
 
     const env = process.env.CDK_ENV || 'dev';
-    const accountId = process.env.CDK_ACCOUNT_ID; // Your AWS account ID
+    const accountId = cdk.Stack.of(this).account;
 
     // Import the existing ElevenLabs API key secret
     const elevenLabsSecret = secretsmanager.Secret.fromSecretNameV2(
@@ -65,7 +65,8 @@ export class InfrastructureStack extends cdk.Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true
+      autoDeleteObjects: true,
+      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED
     });
 
     const processedVideosBucket = new s3.Bucket(this, 'ProcessedVideosBucket', {
@@ -110,8 +111,8 @@ export class InfrastructureStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true
+      autoDeleteObjects: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
     });
 
     // Create DynamoDB table for videos
@@ -198,7 +199,15 @@ export class InfrastructureStack extends cdk.Stack {
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY
     });
-   
+
+    // Create IAM role for API Gateway CloudWatch logging
+    const apiGatewayLoggingRole = new iam.Role(this, 'ApiGatewayLoggingRole', {
+      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonAPIGatewayPushToCloudWatchLogs')
+      ]
+    });
+
     // Common Lambda configuration
     const commonLambdaConfig = {
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -317,15 +326,18 @@ export class InfrastructureStack extends cdk.Stack {
           image: lambda.Runtime.NODEJS_18_X.bundlingImage,
           command: [
             'bash', '-c', [
-              'cd /asset-input',
               'npm install',
               'npm run build',
               'cp -r dist/* /asset-output/',
               'cp package.json /asset-output/',
               'cd /asset-output',
-              'npm install --production'
-            ].join(' && ')
-          ]
+              'npm install --production --cache /tmp/.npm'
+            ].join(' && '),
+          ],
+          environment: {
+            HOME: '/tmp',
+            npm_config_cache: '/tmp/.npm'
+          }
         }
       }),
       handler: 'dist/handlers/videos/status.handler',
@@ -338,15 +350,18 @@ export class InfrastructureStack extends cdk.Stack {
           image: lambda.Runtime.NODEJS_18_X.bundlingImage,
           command: [
             'bash', '-c', [
-              'cd /asset-input',
               'npm install',
               'npm run build',
               'cp -r dist/* /asset-output/',
               'cp package.json /asset-output/',
               'cd /asset-output',
-              'npm install --production'
-            ].join(' && ')
-          ]
+              'npm install --production --cache /tmp/.npm'
+            ].join(' && '),
+          ],
+          environment: {
+            HOME: '/tmp',
+            npm_config_cache: '/tmp/.npm'
+          }
         }
       }),
       handler: 'dist/handlers/videos/process.handler',
@@ -469,6 +484,7 @@ export class InfrastructureStack extends cdk.Stack {
         ],
         maxAge: cdk.Duration.days(1)
       },
+      cloudWatchRole: true,
       deployOptions: {
         accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
