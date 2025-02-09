@@ -69,6 +69,20 @@ export class InfrastructureStack extends cdk.Stack {
       objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED
     });
 
+    rawVideosBucket.addToResourcePolicy(new iam.PolicyStatement({
+      actions: [
+        's3:GetBucketTagging',
+        's3:DeleteObject',
+        's3:ListBucket',
+        's3:GetBucketPolicy',
+      ],
+      resources: [
+        rawVideosBucket.bucketArn,
+        `${rawVideosBucket.bucketArn}/*`
+      ],
+      principals: [new iam.ServicePrincipal('s3.amazonaws.com')]
+    }));
+
     const processedVideosBucket = new s3.Bucket(this, 'ProcessedVideosBucket', {
       bucketName: `dubstudio-processed-videos-${accountId}-${env}`,
       versioned: false,
@@ -114,6 +128,20 @@ export class InfrastructureStack extends cdk.Stack {
       autoDeleteObjects: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY
     });
+
+    processedVideosBucket.addToResourcePolicy(new iam.PolicyStatement({
+      actions: [
+        's3:GetBucketTagging',
+        's3:DeleteObject',
+        's3:ListBucket',
+        's3:GetBucketPolicy',
+      ],
+      resources: [
+        processedVideosBucket.bucketArn,
+        `${processedVideosBucket.bucketArn}/*`
+      ],
+      principals: [new iam.ServicePrincipal('s3.amazonaws.com')]
+    }));
 
     // Create DynamoDB table for videos
     const videosTable = new dynamodb.Table(this, 'DubStudioVideosTable', {
