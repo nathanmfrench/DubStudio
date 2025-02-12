@@ -8,6 +8,11 @@ npx expo-doctor (to check for any issues)
 
 npx expo prebuild (to build the app)
 
+cd ios then pod install then open Dubstudio.xcworkspace
+
+click build in xcode
+
+as thats building, run the app in /frontend using npx expo start --clear
 
 Command for creating a user
 aws cognito-idp sign-up --client-id 5riq4i8922tc7des4jel0h10ig --username test@example.com --password Test123! --user-attributes Name=email,Value=test@example.com
