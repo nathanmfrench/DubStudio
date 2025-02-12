@@ -1,3 +1,14 @@
+Commands for testing the frontend
+--------------------------------
+cd frontend if you havent already
+
+npx expo install (to clear cache might have to rm -rf node_modules and package-lock.json and /ios and /android if those are there)
+
+npx expo-doctor (to check for any issues)
+
+npx expo prebuild (to build the app)
+
+
 Command for creating a user
 aws cognito-idp sign-up --client-id 5riq4i8922tc7des4jel0h10ig --username test@example.com --password Test123! --user-attributes Name=email,Value=test@example.com
 
