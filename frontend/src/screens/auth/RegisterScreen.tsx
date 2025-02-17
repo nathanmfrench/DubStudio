@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -11,25 +11,51 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuth();
 
-  const handleSignUp = async () => {
+  const validateForm = () => {
+    if (!email || !password || !confirmPassword) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return false;
+    }
     if (password !== confirmPassword) {
-      // Handle password mismatch
+      Alert.alert('Error', 'Passwords do not match');
+      return false;
+    }
+    if (password.length < 8) {
+      Alert.alert('Error', 'Password must be at least 8 characters long');
+      return false;
+    }
+    return true;
+  };
+
+  const handleSignUp = async () => {
+    console.log('Sign up button pressed');
+    
+    if (!validateForm()) {
       return;
     }
+
     setLoading(true);
     try {
-      await signUp({
+      console.log('Attempting sign up with email:', email);
+      const signUpResult = await signUp({
         username: email,
         password,
         options: {
           userAttributes: {
-            email
+            email,
           }
         }
       });
+      console.log('Sign up result:', signUpResult);
+      
+      // If successful, navigate to confirmation screen
       navigation.navigate('ConfirmSignUp', { email });
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error('Sign up error:', error);
+      Alert.alert(
+        'Sign Up Failed',
+        error.message || 'An error occurred during sign up. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
