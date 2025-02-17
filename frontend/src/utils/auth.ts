@@ -3,22 +3,18 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 
 const AUTH_TOKEN_KEY = '@auth_token';
 
-export async function getAuthToken(): Promise<string | null> {
+export const getAuthToken = async () => {
   try {
-    const session = await fetchAuthSession();
-    const accessToken = session.tokens?.accessToken;
-    
-    if (!accessToken) {
-      console.error('[Auth] No access token found in session');
-      return null;
+    const { tokens } = await fetchAuthSession({ forceRefresh: false });
+    if (!tokens?.idToken) {
+      throw new Error('No authentication token found');
     }
-
-    return accessToken.toString();
+    return tokens.idToken.toString();
   } catch (error) {
-    console.error('[Auth] Error getting auth token:', error);
-    return null;
+    console.error('Auth token error:', error);
+    throw error;
   }
-}
+};
 
 export async function setAuthToken(token: string): Promise<void> {
   try {
