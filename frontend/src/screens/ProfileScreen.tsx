@@ -295,95 +295,93 @@ export function ProfileScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView edges={['top', 'left', 'right']}>
-        <View style={styles.content}>
-          {/* Profile Header */}
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <Text style={[styles.title, { color: colors.primary }]}>Profile</Text>
-            </View>
-            <View style={styles.headerRight}>
-              <TierBadge tier={currentTier} />
-              <TouchableOpacity 
-                onPress={toggleTheme}
-                style={styles.iconButton}
-              >
-                <MaterialCommunityIcons 
-                  name={isDarkMode ? 'weather-night' : 'white-balance-sunny'} 
-                  size={22} 
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={() => setShowSettings(true)}
-                style={styles.iconButton}
-              >
-                <MaterialCommunityIcons name="cog" size={24} color={colors.primary} />
-              </TouchableOpacity>
-            </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={styles.content}>
+        {/* Profile Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={[styles.title, { color: colors.primary }]}>Profile</Text>
           </View>
-
-          {/* Pricing */}
-          <View style={[styles.pricingContainer, styles.elevatedCard, { 
-            backgroundColor: colors.surface,
-            borderColor: colors.cardBorder
-          }]}>
-            <View style={styles.pricingHeader}>
-              <View style={[styles.savingsBadge, {
-                backgroundColor: isDarkMode ? 'rgba(96, 165, 250, 0.1)' : '#EBF5FF'
-              }]}>
-                <MaterialCommunityIcons name="tag-outline" size={14} color={colors.primary} />
-                <Text style={[styles.savingsText, { color: colors.primary }]}>Save 20% with yearly</Text>
-              </View>
-              <View style={styles.billingToggle}>
-                <TouchableOpacity 
-                  style={[
-                    styles.toggleContainer, 
-                    { backgroundColor: isDarkMode ? '#374151' : '#E5E7EB' },
-                    isAnnual && { backgroundColor: colors.primaryLight }
-                  ]} 
-                  onPress={toggleBilling}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.toggleHandle, { backgroundColor: colors.background }]} />
-                </TouchableOpacity>
-                <Animated.Text style={[styles.billingPeriod, { 
-                  opacity: textOpacity,
-                  color: colors.primary 
-                }]}>
-                  {isAnnual ? 'Yearly' : 'Monthly'}
-                </Animated.Text>
-              </View>
-            </View>
-
-            <View style={styles.pricingContent}>
-              <View style={styles.pricingGrid}>
-                <View style={styles.pricingRow}>
-                  <View style={[styles.pricingTierWrapper, styles.pricingTierMarginRight]}>
-                    {renderPricingTier('Basic')}
-                  </View>
-                  <View style={styles.pricingTierWrapper}>
-                    {renderPricingTier('Premium')}
-                  </View>
-                </View>
-                <View style={styles.pricingRow}>
-                  <View style={[styles.pricingTierWrapper, styles.pricingTierMarginRight]}>
-                    {renderPricingTier('Professional')}
-                  </View>
-                  <View style={styles.pricingTierWrapper}>
-                    {renderPricingTier('Enterprise')}
-                  </View>
-                </View>
-              </View>
-            </View>
+          <View style={styles.headerRight}>
+            <TierBadge tier={currentTier} />
+            <TouchableOpacity 
+              onPress={toggleTheme}
+              style={styles.iconButton}
+            >
+              <MaterialCommunityIcons 
+                name={isDarkMode ? 'weather-night' : 'white-balance-sunny'} 
+                size={22} 
+                color={colors.primary}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={() => setShowSettings(true)}
+              style={styles.iconButton}
+            >
+              <MaterialCommunityIcons name="cog" size={24} color={colors.primary} />
+            </TouchableOpacity>
           </View>
-
-          {renderSettingsModal()}
-          {renderDeleteConfirmModal()}
         </View>
-      </SafeAreaView>
-    </View>
+
+        {/* Pricing */}
+        <View style={[styles.pricingContainer, styles.elevatedCard, { 
+          backgroundColor: colors.surface,
+          borderColor: colors.cardBorder
+        }]}>
+          <View style={styles.pricingHeader}>
+            <View style={[styles.savingsBadge, {
+              backgroundColor: isDarkMode ? 'rgba(96, 165, 250, 0.1)' : '#EBF5FF'
+            }]}>
+              <MaterialCommunityIcons name="tag-outline" size={14} color={colors.primary} />
+              <Text style={[styles.savingsText, { color: colors.primary }]}>Save 20% with yearly</Text>
+            </View>
+            <View style={styles.billingToggle}>
+              <TouchableOpacity 
+                style={[
+                  styles.toggleContainer, 
+                  { backgroundColor: isDarkMode ? '#374151' : '#E5E7EB' },
+                  isAnnual && { backgroundColor: colors.primaryLight }
+                ]} 
+                onPress={toggleBilling}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.toggleHandle, { backgroundColor: colors.background }]} />
+              </TouchableOpacity>
+              <Animated.Text style={[styles.billingPeriod, { 
+                opacity: textOpacity,
+                color: colors.primary 
+              }]}>
+                {isAnnual ? 'Yearly' : 'Monthly'}
+              </Animated.Text>
+            </View>
+          </View>
+
+          <View style={styles.pricingContent}>
+            <View style={styles.pricingGrid}>
+              <View style={styles.pricingRow}>
+                <View style={[styles.pricingTierWrapper, styles.pricingTierMarginRight]}>
+                  {renderPricingTier('Basic')}
+                </View>
+                <View style={styles.pricingTierWrapper}>
+                  {renderPricingTier('Premium')}
+                </View>
+              </View>
+              <View style={styles.pricingRow}>
+                <View style={[styles.pricingTierWrapper, styles.pricingTierMarginRight]}>
+                  {renderPricingTier('Professional')}
+                </View>
+                <View style={styles.pricingTierWrapper}>
+                  {renderPricingTier('Enterprise')}
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {renderSettingsModal()}
+        {renderDeleteConfirmModal()}
+      </View>
+    </SafeAreaView>
   );
 }
 
