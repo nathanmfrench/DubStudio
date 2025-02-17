@@ -6,12 +6,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Amplify } from 'aws-amplify';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { Settings } from 'react-native-fbsdk-next';
-import { amplifyConfig, checkAuthState } from './config/aws-config';
+import { amplifyConfig } from './config/aws-config';
 import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 // Contexts and Services
-import { AuthProvider } from '../src/contexts/AuthContext';
+import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { facebookService } from '../src/services/FacebookService';
 import { TierProvider } from './contexts/TierContext';
 
@@ -27,7 +27,8 @@ Amplify.configure(amplifyConfig);
 
 SplashScreen.preventAutoHideAsync();
 
-export default function App() {
+function AppContent() {
+  const { checkAuthState } = useAuth();
   const [appIsReady, setAppIsReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
@@ -63,6 +64,7 @@ export default function App() {
     };
 
     initializeApp();
+    // Empty dependency array since we only want this to run once on mount
   }, []);
 
   const onLayoutRootView = useCallback(async () => {
@@ -81,15 +83,21 @@ export default function App() {
   }
 
   return (
+    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+      <NavigationContainer>
+        <AppNavigator />
+      </NavigationContainer>
+    </View>
+  );
+}
+
+export default function App() {
+  return (
     <SafeAreaProvider>
       <AuthProvider>
         <TierProvider>
           <ThemeProvider>
-            <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-              <NavigationContainer>
-                <AppNavigator />
-              </NavigationContainer>
-            </View>
+            <AppContent />
           </ThemeProvider>
         </TierProvider>
       </AuthProvider>

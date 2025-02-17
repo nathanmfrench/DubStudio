@@ -14,6 +14,7 @@ interface AuthContextType {
   resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
   loading: boolean;
   error: string | null;
+  checkAuthState: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,10 +24,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    checkAuthState();
-  }, []);
 
   async function checkAuthState() {
     setLoading(true);
@@ -41,6 +38,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    checkAuthState();
+  }, []);
 
   const handleSignIn = async (email: string, password: string) => {
     setLoading(true);
@@ -168,6 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resetPassword: handleResetPassword,
     loading,
     error,
+    checkAuthState,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
