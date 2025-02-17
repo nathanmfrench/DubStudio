@@ -4,6 +4,10 @@ the bottom of the analytics page is still ugly (the account analytics swipe thin
 
 when i click monthly vs yearly on the pricing page, it moves the toggle a little
 
+add a preview of the video on the confirmation screen (the last step in the upload flow)
+
+------------------------------------------------------------------------------------------------
+
 for downloading files
 https://docs.amplify.aws/gen1/react-native/build-a-backend/storage/download/
 
