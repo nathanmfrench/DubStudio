@@ -1,4 +1,5 @@
 todo:
+add subtitle editor (need to make a plan for this, should we do it on the frontend by providing the text via SRT then burning it / editing it with AVFoundation?) tbh i think this is the best way to do it.
 
 the bottom of the analytics page is still ugly (the account analytics swipe thing you'll see)
 

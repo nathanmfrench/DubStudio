@@ -1,4 +1,3 @@
-import { fetchAuthSession, getCurrentUser } from 'aws-amplify/auth';
 import { config } from './env';
 import Constants from 'expo-constants';
 import { Amplify } from 'aws-amplify';
