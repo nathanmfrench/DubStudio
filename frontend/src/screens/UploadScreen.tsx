@@ -1179,32 +1179,19 @@ export const UploadScreen: React.FC = () => {
   const processVideoWithSubtitles = async () => {
     if (!selectedVideo) return;
 
-    // Add debug logging
-    console.log('Debug - Processing video with:', {
-      videoName: selectedVideo?.name,
-      sourceLanguage: uploadState.sourceLanguage,
-      targetLanguages: uploadState.targetLanguages,
-      hasVideo: !!selectedVideo,
-      videoDetails: selectedVideo,
-      fullUploadState: uploadState,
-    });
-
     setIsProcessing(true);
     setProcessingProgress(0);
     setProcessingError(null);
 
     try {
-      // Step 1: Get presigned URL
+      // Step 1: Get presigned URL and upload video
       setProcessingProgress(10);
       const uploadUrlResponse = await videoService.getUploadUrl({
         fileName: selectedVideo.name,
         fileType: 'video/mp4',
       });
 
-      console.log('Debug - Upload URL Response:', uploadUrlResponse);
-
       // Step 2: Upload to S3
-      setProcessingProgress(20);
       await videoService.uploadToS3(
         uploadUrlResponse.uploadUrl,
         {
@@ -1214,62 +1201,37 @@ export const UploadScreen: React.FC = () => {
         },
         {
           onProgress: (progress: number) => {
-            // Update progress from 20% to 70% during upload
-            setProcessingProgress(20 + (progress * 50));
+            setProcessingProgress(10 + (progress * 20));
           }
         }
       );
 
-      // Get videoId from upload response
       const videoId = uploadUrlResponse.videoId;
-      setProcessingProgress(70);
+      setProcessingProgress(30);
 
-      // Start subtitle processing
-      const processResponse = await fetch(`${config.api.baseUrl}/v1/videos/${videoId}/process`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sourceLanguage: uploadState.sourceLanguage,
-          targetLanguages: uploadState.targetLanguages,
-          translationType: 'subtitles',
-          caption: uploadState.caption,
-        }),
-      });
-
-      if (!processResponse.ok) {
-        throw new Error('Failed to process video');
-      }
+      // Step 3: Process all languages in parallel
+      const results = await videoService.processLanguagesInParallel(
+        videoId,
+        uploadState.sourceLanguage,
+        uploadState.targetLanguages,
+        subtitleStyle
+      );
 
       setProcessingProgress(80);
 
-      // Poll for status until complete
-      let status = 'processing';
-      while (status === 'processing') {
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Poll every 2 seconds
+      // Step 4: Download all processed videos
+      const downloadPromises = results.map(async ({ language, videoKey }) => {
+        const downloadUrl = `${config.api.baseUrl}/v1/videos/${videoId}/download/${videoKey}`;
+        const filename = `subtitled_${language}_${selectedVideo.name}`;
+        return await downloadVideo(downloadUrl, filename);
+      });
 
-        const statusResponse = await fetch(`${config.api.baseUrl}/v1/videos/${videoId}/status`);
-        const statusData = await statusResponse.json();
-        
-        if (statusData.status === 'completed') {
-          status = 'completed';
-          setProcessingProgress(90); // Save last 10% for download progress
-        } else if (statusData.status === 'failed') {
-          throw new Error(statusData.error || 'Processing failed');
-        } else {
-          setProcessingProgress(70 + (statusData.progress || 0) * 0.2); // Use 20% for processing
-        }
-      }
-
-      // Download the processed video
-      const downloadUrl = `${config.api.baseUrl}/v1/videos/${videoId}/download`;
-      const filename = `subtitled_${selectedVideo.name}`;
-      const localUri = await downloadVideo(downloadUrl, filename);
+      const downloadedFiles = await Promise.all(downloadPromises);
+      setProcessingProgress(100);
 
       Alert.alert(
         'Download Complete',
-        `Video saved to: ${localUri}`,
+        `Videos saved to:\n${downloadedFiles.join('\n')}`,
         [
           {
             text: 'OK',
@@ -1284,14 +1246,6 @@ export const UploadScreen: React.FC = () => {
     } catch (error: any) {
       console.error('Processing error:', error);
       setProcessingError(error.message || 'Failed to process video');
-    } finally {
-      if (processingError) {
-        setTimeout(() => {
-          setIsProcessing(false);
-          setProcessingProgress(0);
-          setProcessingError(null);
-        }, 2000);
-      }
     }
   };
 

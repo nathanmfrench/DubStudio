@@ -559,6 +559,68 @@ export class InfrastructureStack extends cdk.Stack {
       defaultMethodOptions
     );
 
+    // Add new lambda functions
+    const generateSrtLambda = new lambda.Function(this, 'GenerateSrtFunction', {
+      runtime: lambda.Runtime.PYTHON_3_9,
+      handler: 'generate-srt.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/src/handlers/videos')),
+      timeout: Duration.minutes(15),
+      memorySize: 1024,
+      environment: {
+        RAW_VIDEOS_BUCKET: rawVideosBucket.bucketName,
+        PROCESSED_VIDEOS_BUCKET: processedVideosBucket.bucketName
+      },
+      layers: [processingLayer]
+    });
+
+    const burnSubtitlesLambda = new lambda.Function(this, 'BurnSubtitlesFunction', {
+      runtime: lambda.Runtime.PYTHON_3_9,
+      handler: 'burn-subtitles.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/src/handlers/videos')),
+      timeout: Duration.minutes(15),
+      memorySize: 1024,
+      environment: {
+        RAW_VIDEOS_BUCKET: rawVideosBucket.bucketName,
+        PROCESSED_VIDEOS_BUCKET: processedVideosBucket.bucketName
+      },
+      layers: [processingLayer]
+    });
+
+    // Grant S3 permissions
+    rawVideosBucket.grantRead(generateSrtLambda);
+    processedVideosBucket.grantReadWrite(generateSrtLambda);
+    rawVideosBucket.grantRead(burnSubtitlesLambda);
+    processedVideosBucket.grantReadWrite(burnSubtitlesLambda);
+
+    // Grant AWS Transcribe and Translate permissions
+    generateSrtLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'transcribe:StartTranscriptionJob',
+        'transcribe:GetTranscriptionJob',
+        'translate:TranslateText'
+      ],
+      resources: ['*']
+    }));
+
+    // Add API endpoints
+    const generateSrtIntegration = new apigateway.LambdaIntegration(generateSrtLambda);
+    const burnSubtitlesIntegration = new apigateway.LambdaIntegration(burnSubtitlesLambda);
+
+    api.root
+      .resourceForPath('v1/videos/{videoId}/generate-srt')
+      .addMethod('POST', generateSrtIntegration, {
+        authorizer: apiAuthorizer,
+        authorizationType: apigateway.AuthorizationType.COGNITO
+      });
+
+    api.root
+      .resourceForPath('v1/videos/{videoId}/burn-subtitles')
+      .addMethod('POST', burnSubtitlesIntegration, {
+        authorizer: apiAuthorizer,
+        authorizationType: apigateway.AuthorizationType.COGNITO
+      });
+
     // Output important values
     new cdk.CfnOutput(this, 'DubStudioApiUrl', {
       value: api.url,

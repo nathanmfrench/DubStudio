@@ -10,6 +10,8 @@ add a preview of the video on the confirmation screen (the last step in the uplo
 should we give them the raw srt file and let them mess with it?
 
 change from using AWS translate to using a LLM to get the SRT file
+
+should we give the user the final SRT file if they want?
 ------------------------------------------------------------------------------------------------
 
 for downloading files
