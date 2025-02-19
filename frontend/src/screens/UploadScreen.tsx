@@ -1075,6 +1075,12 @@ export const UploadScreen: React.FC = () => {
             title={uploadState.deliveryOption === 'post' ? 'Upload & Post' :
                   uploadState.deliveryOption === 'schedule' ? 'Schedule Post' : 'Download Video'}
             onPress={() => {
+              if (!selectedVideo || !uploadState.sourceLanguage || !uploadState.targetLanguages.length) {
+                Alert.alert('Missing Information', 
+                  'Please ensure you have selected a video, source language, and at least one target language.');
+                return;
+              }
+              
               if (uploadState.deliveryOption === 'download' && uploadState.translationType === 'subtitles') {
                 processVideoWithSubtitles();
               } else {
@@ -1173,6 +1179,16 @@ export const UploadScreen: React.FC = () => {
   const processVideoWithSubtitles = async () => {
     if (!selectedVideo) return;
 
+    // Add debug logging
+    console.log('Debug - Processing video with:', {
+      videoName: selectedVideo?.name,
+      sourceLanguage: uploadState.sourceLanguage,
+      targetLanguages: uploadState.targetLanguages,
+      hasVideo: !!selectedVideo,
+      videoDetails: selectedVideo,
+      fullUploadState: uploadState,
+    });
+
     setIsProcessing(true);
     setProcessingProgress(0);
     setProcessingError(null);
@@ -1184,6 +1200,8 @@ export const UploadScreen: React.FC = () => {
         fileName: selectedVideo.name,
         fileType: 'video/mp4',
       });
+
+      console.log('Debug - Upload URL Response:', uploadUrlResponse);
 
       // Step 2: Upload to S3
       setProcessingProgress(20);

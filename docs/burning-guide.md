@@ -1,4 +1,14 @@
 Approaches:
+
+new subtitle flow: 
+I want to have a separate lambda function for burning the subtitles on, and for getting the SRT file. I want the user to enter in their information (source, target language, video etc) then send a request to get the SRT file (using AWS translate or some other external API then they can use that SRT file to edit on the UI to get the final information (The SubtitleStyle information).
+
+Would you like me to start implementing this new flow? I can:
+Create the new lambda function structure
+Modify the frontend flow
+Add the SRT editing interface
+Update the subtitle preview system
+
 approach 1)
 Ah, that's a crucial detail! For social media sharing, you're absolutely right - the subtitles need to be burned into the video. In that case, let's revise the approach.
 
@@ -166,3 +176,5 @@ Would you like me to help you implement any of these specific components? I can:
 
 
 FINISHED STEPS:
+We have updated the video.ts types file to include a SubtitleStyle interface.
+we also updated the subtitle lambda event interface to match this change
