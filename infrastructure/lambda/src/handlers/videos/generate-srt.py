@@ -35,17 +35,13 @@ def handler(event, context):
             s3.upload_file(audio_file.name, os.environ['PROCESSED_VIDEOS_BUCKET'], audio_key)
         
         # --- Transcription ---
-        job_name = f"transcribe-{uuid.uuid4()}-{target_lang}"
-        
-        # Start transcription with a unique output key
+        job_name = f"transcribe-{uuid.uuid4()}"
         transcribe.start_transcription_job(
             TranscriptionJobName=job_name,
             Media={'MediaFileUri': f"s3://{os.environ['PROCESSED_VIDEOS_BUCKET']}/{audio_key}"},
             MediaFormat='mp3',
             LanguageCode=source_lang,
-            Subtitles={'Formats': ['srt']},
-            OutputBucketName=os.environ['PROCESSED_VIDEOS_BUCKET'],
-            OutputKey=f"transcripts/{job_name}"
+            Subtitles={'Formats': ['srt']}
         )
         
         # Wait for transcription completion
@@ -97,7 +93,7 @@ def handler(event, context):
         }
     
     except Exception as e:
-        print(f"Error in generate-srt for language {target_lang}: {str(e)}")
+        print(f"Error in generate-srt: {str(e)}")
         raise e
     
     finally:

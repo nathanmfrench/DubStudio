@@ -1179,19 +1179,32 @@ export const UploadScreen: React.FC = () => {
   const processVideoWithSubtitles = async () => {
     if (!selectedVideo) return;
 
+    // Add debug logging
+    console.log('Debug - Processing video with:', {
+      videoName: selectedVideo?.name,
+      sourceLanguage: uploadState.sourceLanguage,
+      targetLanguages: uploadState.targetLanguages,
+      hasVideo: !!selectedVideo,
+      videoDetails: selectedVideo,
+      fullUploadState: uploadState,
+    });
+
     setIsProcessing(true);
     setProcessingProgress(0);
     setProcessingError(null);
 
     try {
-      // Step 1: Get presigned URL and upload video
+      // Step 1: Get presigned URL
       setProcessingProgress(10);
       const uploadUrlResponse = await videoService.getUploadUrl({
         fileName: selectedVideo.name,
         fileType: 'video/mp4',
       });
 
+      console.log('Debug - Upload URL Response:', uploadUrlResponse);
+
       // Step 2: Upload to S3
+      setProcessingProgress(20);
       await videoService.uploadToS3(
         uploadUrlResponse.uploadUrl,
         {
@@ -1201,28 +1214,45 @@ export const UploadScreen: React.FC = () => {
         },
         {
           onProgress: (progress: number) => {
-            setProcessingProgress(10 + (progress * 20));
+            // Update progress from 20% to 40% during upload
+            setProcessingProgress(20 + (progress * 20));
           }
         }
       );
 
       const videoId = uploadUrlResponse.videoId;
-      setProcessingProgress(30);
+      setProcessingProgress(40);
 
-      // Step 3: Process all languages in parallel
-      const results = await videoService.processLanguagesInParallel(
-        videoId,
-        uploadState.sourceLanguage,
-        uploadState.targetLanguages,
-        subtitleStyle
-      );
+      // Step 3: Generate SRT files for each target language
+      const srtPromises = uploadState.targetLanguages.map(async (targetLang) => {
+        const srtKey = await videoService.generateSRT(
+          videoId,
+          uploadState.sourceLanguage,
+          targetLang
+        );
+        return { targetLang, srtKey };
+      });
 
+      const srtResults = await Promise.all(srtPromises);
+      setProcessingProgress(60);
+
+      // Step 4: Burn subtitles for each language
+      const burnPromises = srtResults.map(async ({ targetLang, srtKey }) => {
+        const processedVideoKey = await videoService.burnSubtitles(
+          videoId,
+          srtKey,
+          subtitleStyle
+        );
+        return { targetLang, videoKey: processedVideoKey };
+      });
+
+      const burnResults = await Promise.all(burnPromises);
       setProcessingProgress(80);
 
-      // Step 4: Download all processed videos
-      const downloadPromises = results.map(async ({ language, videoKey }) => {
+      // Step 5: Download the processed videos
+      const downloadPromises = burnResults.map(async ({ targetLang, videoKey }) => {
         const downloadUrl = `${config.api.baseUrl}/v1/videos/${videoId}/download/${videoKey}`;
-        const filename = `subtitled_${language}_${selectedVideo.name}`;
+        const filename = `subtitled_${targetLang}_${selectedVideo.name}`;
         return await downloadVideo(downloadUrl, filename);
       });
 
@@ -1246,6 +1276,14 @@ export const UploadScreen: React.FC = () => {
     } catch (error: any) {
       console.error('Processing error:', error);
       setProcessingError(error.message || 'Failed to process video');
+    } finally {
+      if (processingError) {
+        setTimeout(() => {
+          setIsProcessing(false);
+          setProcessingProgress(0);
+          setProcessingError(null);
+        }, 2000);
+      }
     }
   };
 
