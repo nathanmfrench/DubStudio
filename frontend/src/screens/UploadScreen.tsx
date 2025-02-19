@@ -24,6 +24,8 @@ import { VideoUpload } from '../components/VideoUpload/VideoUpload';
 import { videoService } from '../services/videoService';
 import { useAuth } from '../contexts/AuthContext';
 import * as FileSystem from 'expo-file-system';
+import { SubtitleStyler } from '../components/SubtitleStyler/SubtitleStyler';
+import { SubtitleStyle } from '../types/video';
 
 interface VideoSelection {
   name: string;
@@ -282,6 +284,16 @@ export const UploadScreen: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [processingError, setProcessingError] = useState<string | null>(null);
+  const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>({
+    fontSize: 24,
+    fontColor: '#FFFFFF',
+    backgroundColor: '#000000',
+    fontType: 'Arial',
+    outline: 1,
+    opacity: 0.8,
+    position: { x: 50, y: 90 },
+  });
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const pickVideo = async () => {
     try {
@@ -1261,6 +1273,40 @@ export const UploadScreen: React.FC = () => {
     }
   };
 
+  const renderSubtitleStyleStep = () => {
+    if (!selectedVideo) return null;
+
+    return (
+      <View style={styles.container}>
+        <Text style={styles.stepTitle}>Customize Subtitles</Text>
+        <SubtitleStyler
+          style={subtitleStyle}
+          onChange={setSubtitleStyle}
+          onPreview={handlePreview}
+        />
+      </View>
+    );
+  };
+
+  const handlePreview = async () => {
+    if (!selectedVideo) return;
+    
+    // Generate a preview frame with the current subtitle style
+    try {
+      const response = await videoService.generateSubtitlePreview({
+        videoId: selectedVideo.id,
+        subtitleStyle,
+        timestamp: selectedVideo.duration / 2, // Preview middle of video
+      });
+      
+      // Show preview image
+      setPreviewImage(response.previewUrl);
+    } catch (error) {
+      console.error('Preview generation failed:', error);
+      Alert.alert('Error', 'Failed to generate preview');
+    }
+  };
+
   return (
     <ErrorBoundary>
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -1308,6 +1354,8 @@ export const UploadScreen: React.FC = () => {
                   renderStep4()
                 ) : currentStep === 5 ? (
                   renderStep5()
+                ) : currentStep === 6 ? (
+                  renderSubtitleStyleStep()
                 ) : null}
               </ScrollView>
             </View>
@@ -1660,5 +1708,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  stepTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
   },
 }); 

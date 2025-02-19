@@ -1,0 +1,49 @@
+import React from 'react';
+import { View, PanResponder, StyleSheet } from 'react-native';
+
+interface Position {
+  x: number;
+  y: number;
+}
+
+interface PositionPickerProps {
+  value: Position;
+  onChange: (position: Position) => void;
+}
+
+export const PositionPicker: React.FC<PositionPickerProps> = ({
+  value,
+  onChange,
+}) => {
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderMove: (_, gestureState) => {
+      const { moveX, moveY, x0, y0 } = gestureState;
+      const containerWidth = 300; // Width of your container
+      const containerHeight = 200; // Height of your container
+      
+      const newX = Math.max(0, Math.min(100, (moveX / containerWidth) * 100));
+      const newY = Math.max(0, Math.min(100, (moveY / containerHeight) * 100));
+      
+      onChange({ x: newX, y: newY });
+    },
+  });
+
+  return (
+    <View style={styles.container} {...panResponder.panHandlers}>
+      <View
+        style={[
+          styles.positionIndicator,
+          {
+            left: `${value.x}%`,
+            top: `${value.y}%`,
+          },
+        ]}
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  // ... styles
+});

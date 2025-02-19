@@ -2,6 +2,7 @@ import { Handler } from 'aws-lambda';
 import { JobService } from '../../services/jobService';
 import { spawn } from 'child_process';
 import { S3 } from 'aws-sdk';
+import { SubtitleStyle } from '../../types/video';
 
 const s3 = new S3();
 const RAW_BUCKET = process.env.RAW_VIDEOS_BUCKET!;
@@ -14,6 +15,7 @@ interface SubtitleEvent {
   sourceLanguage: string;
   targetLanguage: string;
   videoKey: string;
+  subtitleStyle?: SubtitleStyle;
 }
 
 export const handler: Handler<SubtitleEvent> = async (event) => {

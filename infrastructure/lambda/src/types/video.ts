@@ -12,6 +12,20 @@ export interface VideoMetadata {
   // Add to VideoMetadata interface
   subtitleStatus?: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
   subtitleFileKey?: string;
+  subtitleStyle?: SubtitleStyle;
+}
+
+export interface SubtitleStyle {
+  fontSize?: number;        // e.g., 24
+  fontColor?: string;       // hex color like '#FFFFFF'
+  backgroundColor?: string; // hex color like '#000000'
+  fontType?: string;        // e.g., 'Arial', 'Helvetica', etc.
+  outline?: number;         // e.g., 1
+  opacity?: number;         // 0-1, for background opacity
+  position?: {
+    x: number;             // percentage from left (0-100)
+    y: number;             // percentage from top (0-100)
+  };
 }
 
 export type VideoStatus = 
@@ -25,6 +39,7 @@ export interface ProcessVideoRequest {
   sourceLanguage: string;
   targetLanguages: string[];
   caption?: boolean;
+  subtitleStyle?: SubtitleStyle;
 }
 
 export interface UploadVideoRequest {

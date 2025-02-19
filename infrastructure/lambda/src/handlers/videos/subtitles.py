@@ -5,6 +5,7 @@ import subprocess
 from urllib.parse import urlparse
 from tempfile import NamedTemporaryFile
 import time
+from subtitle_utils import SubtitleStyle
 
 s3 = boto3.client('s3')
 transcribe = boto3.client('transcribe')
@@ -91,10 +92,24 @@ def handler(event, context):
                 else:
                     f_out.write(line)
         
+        # Initialize subtitle styler with video path
+        subtitle_style_params = event.get('subtitleStyle', {})
+        if subtitle_style_params:
+            print(f"Applying subtitle styles: {subtitle_style_params}")
+        subtitle_style = SubtitleStyle(
+            style_params=subtitle_style_params,
+            video_path=input_video
+        )
+        
+        # Get FFMPEG style string
+        style_string = subtitle_style.get_ffmpeg_style()
+        debug_info = subtitle_style.get_debug_info()
+        print(f"Subtitle style debug info: {debug_info}")
+        
         # --- Burn Subtitles ---
         subprocess.run([
             './ffmpeg', '-i', input_video,
-            '-vf', f"subtitles={translated_srt}:force_style='FontName=Arial,FontSize=24'",
+            '-vf', f"subtitles={translated_srt}:{style_string}",
             '-c:a', 'copy',
             output_video
         ], check=True)
