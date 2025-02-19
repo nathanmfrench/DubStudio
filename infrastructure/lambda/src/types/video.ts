@@ -23,9 +23,13 @@ export interface SubtitleStyle {
   outline?: number;         // e.g., 1
   opacity?: number;         // 0-1, for background opacity
   position?: {
+    width: number;
+    height: number;
     x: number;             // percentage from left (0-100)
     y: number;             // percentage from top (0-100)
   };
+  bold?: boolean;
+  italic?: boolean;
 }
 
 export type VideoStatus = 

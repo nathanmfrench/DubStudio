@@ -2,6 +2,7 @@ import { post, get } from 'aws-amplify/api';
 import { API_URL } from '..//config/constants';
 import { getAuthToken } from '..//utils/auth';
 import { amplifyConfig } from '..//config/aws-config';
+import { SubtitleStyle } from 'infrastructure/lambda/src/types/video';
 
 export interface UploadVideoRequest {
   fileName: string;
@@ -28,6 +29,19 @@ export interface VideoStatus {
 
 interface UploadOptions {
   onProgress?: (percentage: number) => void;
+}
+
+interface SubtitlePreviewRequest {
+  videoId: string;
+  subtitleStyle: SubtitleStyle;
+  timestamp: number;
+  sourceLanguage: string;
+  targetLanguage: string;
+  previewText: string;
+}
+
+interface SubtitlePreviewResponse {
+  previewUrl: string;
 }
 
 class VideoService {
@@ -171,6 +185,30 @@ class VideoService {
       return response as unknown as VideoStatus;
     } catch (error) {
       console.error('Failed to get video status:', error);
+      throw error;
+    }
+  }
+
+  async generateSubtitlePreview(params: SubtitlePreviewRequest): Promise<SubtitlePreviewResponse> {
+    try {
+      const { body } = await post({
+        apiName: 'api',
+        path: `/videos/${params.videoId}/subtitle-preview`,
+        options: {
+          body: JSON.stringify({
+            style: params.subtitleStyle,
+            timestamp: params.timestamp,
+          }),
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        },
+      }).response;
+
+      const response = await body.json();
+      return response as unknown as SubtitlePreviewResponse;
+    } catch (error) {
+      console.error('Error generating subtitle preview:', error);
       throw error;
     }
   }

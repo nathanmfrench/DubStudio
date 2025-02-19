@@ -7,6 +7,7 @@ when i click monthly vs yearly on the pricing page, it moves the toggle a little
 
 add a preview of the video on the confirmation screen (the last step in the upload flow)
 
+should we give them the raw srt file and let them mess with it?
 ------------------------------------------------------------------------------------------------
 
 for downloading files

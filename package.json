@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.1.0",
+    "@react-native-community/slider": "^4.5.5",
     "axios": "^1.7.9",
     "expo": "~52.0.27",
     "expo-document-picker": "^13.0.2",
@@ -23,6 +24,7 @@
     "react-native": "0.76.6"
   },
   "devDependencies": {
-    "@react-native-community/cli": "latest"
+    "@react-native-community/cli": "latest",
+    "@types/lodash": "^4.17.15"
   }
 }

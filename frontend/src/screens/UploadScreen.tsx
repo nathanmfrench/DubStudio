@@ -25,9 +25,11 @@ import { videoService } from '../services/videoService';
 import { useAuth } from '../contexts/AuthContext';
 import * as FileSystem from 'expo-file-system';
 import { SubtitleStyler } from '../components/SubtitleStyler/SubtitleStyler';
-import { SubtitleStyle } from '../types/video';
+import { SubtitleStyle } from 'infrastructure/lambda/src/types/video';
+import { v4 as uuid } from 'uuid';
 
 interface VideoSelection {
+  id: string;
   name: string;
   uri: string;
   duration: number;
@@ -291,7 +293,7 @@ export const UploadScreen: React.FC = () => {
     fontType: 'Arial',
     outline: 1,
     opacity: 0.8,
-    position: { x: 50, y: 90 },
+    position: { x: 50, y: 90, width: 100, height: 100 },
   });
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
@@ -350,6 +352,7 @@ export const UploadScreen: React.FC = () => {
         }
 
         setSelectedVideo({
+          id: uuid(),
           name: asset.fileName || 'video',
           uri: asset.uri,
           duration: durationInSeconds,
@@ -478,7 +481,8 @@ export const UploadScreen: React.FC = () => {
   );
 
   const goToNextStep = () => {
-    if (currentStep < 5) {
+    const maxSteps = uploadState.translationType === 'subtitles' ? 6 : 5;
+    if (currentStep < maxSteps) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -1276,6 +1280,9 @@ export const UploadScreen: React.FC = () => {
   const renderSubtitleStyleStep = () => {
     if (!selectedVideo) return null;
 
+    // Get first target language for preview
+    const previewLanguage = uploadState.targetLanguages[0];
+    
     return (
       <View style={styles.container}>
         <Text style={styles.stepTitle}>Customize Subtitles</Text>
@@ -1283,6 +1290,9 @@ export const UploadScreen: React.FC = () => {
           style={subtitleStyle}
           onChange={setSubtitleStyle}
           onPreview={handlePreview}
+          sourceLanguage={uploadState.sourceLanguage}
+          targetLanguage={previewLanguage}
+          previewText="This is a sample subtitle text for preview"
         />
       </View>
     );
@@ -1297,6 +1307,9 @@ export const UploadScreen: React.FC = () => {
         videoId: selectedVideo.id,
         subtitleStyle,
         timestamp: selectedVideo.duration / 2, // Preview middle of video
+        sourceLanguage: uploadState.sourceLanguage,
+        targetLanguage: uploadState.targetLanguages[0],
+        previewText: "This is a sample subtitle text for preview"
       });
       
       // Show preview image
@@ -1332,7 +1345,7 @@ export const UploadScreen: React.FC = () => {
                   )}
                   <Text style={[styles.title, { color: colors.primary }]}>New Post</Text>
                   <Text style={[styles.stepIndicator, { color: colors.textSecondary }]}>
-                    Step {currentStep} of 5
+                    Step {currentStep} of {uploadState.translationType === 'subtitles' ? 6 : 5}
                   </Text>
                 </View>
                 <View style={styles.headerRight}>
@@ -1349,13 +1362,19 @@ export const UploadScreen: React.FC = () => {
                 ) : currentStep === 2 ? (
                   renderStep2()
                 ) : currentStep === 3 ? (
+                  uploadState.translationType === 'subtitles' ? 
+                  renderStep3() :
                   renderStep3()
                 ) : currentStep === 4 ? (
+                  uploadState.translationType === 'subtitles' ? 
+                  renderSubtitleStyleStep() :
                   renderStep4()
                 ) : currentStep === 5 ? (
+                  uploadState.translationType === 'subtitles' ? 
+                  renderStep4() :
                   renderStep5()
                 ) : currentStep === 6 ? (
-                  renderSubtitleStyleStep()
+                  renderStep5()
                 ) : null}
               </ScrollView>
             </View>
