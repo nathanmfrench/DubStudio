@@ -2,9 +2,11 @@ todo:
 
 once aidan gets developer account, we just use github and he uses his own signing identity and bundle identifier (basically pretend its 2 separate apps)
 
+in order to do the subtitle editor, we trigger a lambda to get the translation and make the SRT file from the backend, then we do the modification to get the SubtitleStyle object with the video, then trigger the lambda to burn the subtitles onto the video and upload it to S3.
+
 add subtitle editor (need to make a plan for this, should we do it on the frontend by providing the text via SRT (need to find optimal way to do placements of subtitles like snapping to center etc)
 
-in order to do the above, we trigger a lambda to get the translation and make the SRT file from the backend, then we do the modification to get the SubtitleStyle object with the video, then trigger the lambda to burn the subtitles onto the video and upload it to S3.
+
 the bottom of the analytics page is still ugly (the account analytics swipe thing you'll see)
 
 when i click monthly vs yearly on the pricing page, it moves the toggle a little
